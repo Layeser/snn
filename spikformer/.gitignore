@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# Données (CIFAR, etc.)
+data/
+notebooks/data/
+*.tar.gz
+*.zip
+
+# Checkpoints & logs d'entraînement
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+runs/
+logs/
+wandb/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Tests / outils
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
