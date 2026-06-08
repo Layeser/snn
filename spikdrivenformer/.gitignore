@@ -15,13 +15,12 @@ build/
 venv/
 env/
 
-# Données (CIFAR, etc.)
+# Données
 data/
-notebooks/data/
 *.tar.gz
 *.zip
 
-# Checkpoints & logs d'entraînement
+# Checkpoints & logs
 checkpoints/
 save/
 *.pt
@@ -31,7 +30,6 @@ runs/
 logs/
 wandb/
 mlruns/
-*.db
 
 # Jupyter
 .ipynb_checkpoints/

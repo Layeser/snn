@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Entraînement Spikformer sur CIFAR-10.
+Entraînement Spike-Driven Transformer sur CIFAR-10.
 
 Hyperparamètres : config/train.yml (validé) + override CLI.
 Tracking : MLflow (métriques, hyperparamètres, artefacts).
@@ -16,15 +16,15 @@ import torch.nn as nn
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = ROOT / "config" / "train.yml"
-MLFLOW_EXPERIMENT = "Spikformer-CIFAR10"
+MLFLOW_EXPERIMENT = "SpikeDrivenTransformer-CIFAR10"
 
 sys.path.insert(0, str(ROOT / "src" / "models"))
 sys.path.insert(0, str(ROOT / "src"))
 
 from loaders.cifar import get_cifar10_loaders
-from models import Spikformer
+from models import SpikeDrivenTransformer
 from utils.config import parse_train_args
-from utils.config_schema import SPIKFORMER_CONFIG_SCHEMA, validate_spikformer_config
+from utils.config_schema import SPIKDRIVEN_CONFIG_SCHEMA, validate_spikdriven_config
 from utils.device import resolve_device
 from utils.mlflow_tracking import (
     log_artifacts,
@@ -37,7 +37,7 @@ from utils.training import train_one_epoch, validate
 
 
 def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Train Spikformer on CIFAR-10")
+    p = argparse.ArgumentParser(description="Train Spike-Driven Transformer on CIFAR-10")
     p.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
     p.add_argument("--epochs", type=int, default=config["epochs"])
     p.add_argument("--batch-size", type=int, default=config["batch_size"])
@@ -48,6 +48,8 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
     p.add_argument("--num-heads", type=int, default=config["num_heads"])
     p.add_argument("--T", type=int, default=config["T"])
     p.add_argument("--num-workers", type=int, default=config["num_workers"])
+    p.add_argument("--pooling-stat", type=str, default=config["pooling_stat"])
+    p.add_argument("--spike-mode", type=str, default=config["spike_mode"])
     p.add_argument("--data-dir", type=str, default=config["data_dir"])
     p.add_argument("--save-dir", type=str, default=config["save_dir"])
     p.add_argument("--device", type=str, default=config["device"])
@@ -57,9 +59,9 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
 def main():
     args, config = parse_train_args(
         DEFAULT_CONFIG_PATH,
-        SPIKFORMER_CONFIG_SCHEMA,
+        SPIKDRIVEN_CONFIG_SCHEMA,
         build_parser,
-        extra_validators=[validate_spikformer_config],
+        extra_validators=[validate_spikdriven_config],
     )
     print(f"Config validée: {args.config}")
     device = resolve_device(args.device)
@@ -69,7 +71,8 @@ def main():
     print(f"Device: {device}")
     print(
         f"Hyperparamètres: epochs={args.epochs}, batch_size={args.batch_size}, "
-        f"lr={args.lr}, embed_dim={args.embed_dim}, depth={args.depth}, T={args.T}"
+        f"lr={args.lr}, embed_dim={args.embed_dim}, depth={args.depth}, "
+        f"T={args.T}, pooling_stat={args.pooling_stat}, spike_mode={args.spike_mode}"
     )
 
     train_loader, val_loader = get_cifar10_loaders(
@@ -80,13 +83,15 @@ def main():
     )
     print(f"Train batches: {len(train_loader)} | Val batches: {len(val_loader)}")
 
-    model = Spikformer(
+    model = SpikeDrivenTransformer(
         img_size=32,
         in_channels=3,
         num_classes=10,
         embed_dim=args.embed_dim,
         depth=args.depth,
         num_heads=args.num_heads,
+        pooling_stat=args.pooling_stat,
+        spike_mode=args.spike_mode,
         T=args.T,
     ).to(device)
 
@@ -108,6 +113,8 @@ def main():
                 "num_heads": args.num_heads,
                 "T": args.T,
                 "num_workers": args.num_workers,
+                "pooling_stat": args.pooling_stat,
+                "spike_mode": args.spike_mode,
                 "device": str(device),
             }
         )

@@ -1,0 +1,14 @@
+epochs: 2
+batch_size: 128
+learning_rate: 0.0005
+weight_decay: 0.06
+emb_dim: 256
+depth: 4
+num_heads: 8
+T: 4
+num_workers: 0  # WSL : mettre 0 si le DataLoader semble bloquer
+pooling_stat: "0011"
+spike_mode: lif
+data_dir: /home/layesekou/masterds/internship/data
+save_dir: /home/layesekou/masterds/internship/snn/spikdrivenformer/save
+device: cuda
