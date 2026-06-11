@@ -1,15 +1,8 @@
 import torch.nn as nn
-from spikingjelly.clock_driven.neuron import MultiStepLIFNode, MultiStepParametricLIFNode
+
+from modules.spike import make_lif
 
 __all__ = ["SPS"]
-
-
-def _make_lif(spike_mode: str):
-    if spike_mode == "lif":
-        return MultiStepLIFNode(tau=2.0, detach_reset=True)
-    if spike_mode == "plif":
-        return MultiStepParametricLIFNode(init_tau=2.0, detach_reset=True)
-    raise NotImplementedError(f"Unsupported spike mode: {spike_mode}")
 
 
 class SPS(nn.Module):
@@ -29,30 +22,32 @@ class SPS(nn.Module):
         embed_dims=256,
         pooling_stat="0011",
         spike_mode="lif",
+        lif_backend="auto",
     ):
         super().__init__()
         patch_size = patch_size if isinstance(patch_size, tuple) else (patch_size, patch_size)
         self.patch_size = patch_size
         self.pooling_stat = pooling_stat
+        lif = lambda: make_lif(spike_mode, lif_backend=lif_backend)
 
         self.proj_conv = nn.Conv2d(in_channels, embed_dims // 8, kernel_size=3, stride=1, padding=1, bias=False)
         self.proj_bn = nn.BatchNorm2d(embed_dims // 8)
-        self.proj_lif = _make_lif(spike_mode)
+        self.proj_lif = lif()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.proj_conv1 = nn.Conv2d(embed_dims // 8, embed_dims // 4, kernel_size=3, stride=1, padding=1, bias=False)
         self.proj_bn1 = nn.BatchNorm2d(embed_dims // 4)
-        self.proj_lif1 = _make_lif(spike_mode)
+        self.proj_lif1 = lif()
         self.maxpool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.proj_conv2 = nn.Conv2d(embed_dims // 4, embed_dims // 2, kernel_size=3, stride=1, padding=1, bias=False)
         self.proj_bn2 = nn.BatchNorm2d(embed_dims // 2)
-        self.proj_lif2 = _make_lif(spike_mode)
+        self.proj_lif2 = lif()
         self.maxpool2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.proj_conv3 = nn.Conv2d(embed_dims // 2, embed_dims, kernel_size=3, stride=1, padding=1, bias=False)
         self.proj_bn3 = nn.BatchNorm2d(embed_dims)
-        self.proj_lif3 = _make_lif(spike_mode)
+        self.proj_lif3 = lif()
         self.maxpool3 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.rpe_conv = nn.Conv2d(embed_dims, embed_dims, kernel_size=3, stride=1, padding=1, bias=False)

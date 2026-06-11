@@ -1,18 +1,8 @@
 import torch.nn as nn
-from spikingjelly.clock_driven.neuron import MultiStepLIFNode, MultiStepParametricLIFNode
+
+from modules.spike import make_lif
 
 __all__ = ["SDSA"]
-
-
-def _make_lif(spike_mode: str, v_threshold: float | None = None):
-    kwargs = {"detach_reset": True}
-    if v_threshold is not None:
-        kwargs["v_threshold"] = v_threshold
-    if spike_mode == "lif":
-        return MultiStepLIFNode(tau=2.0, **kwargs)
-    if spike_mode == "plif":
-        return MultiStepParametricLIFNode(init_tau=2.0, **kwargs)
-    raise NotImplementedError(f"Unsupported spike mode: {spike_mode}")
 
 
 class Erode(nn.Module):
@@ -42,6 +32,7 @@ class SDSA(nn.Module):
         num_heads=8,
         qkv_bias=False,
         spike_mode="lif",
+        lif_backend="auto",
         dvs=False,
         layer=0,
     ):
@@ -54,22 +45,20 @@ class SDSA(nn.Module):
         if dvs:
             self.pool = Erode()
 
-        self.shortcut_lif = _make_lif(spike_mode)
+        def lif(v_threshold=None):
+            return make_lif(spike_mode, v_threshold=v_threshold, lif_backend=lif_backend)
 
+        self.shortcut_lif = lif()
         self.q_conv = nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias)
         self.q_bn = nn.BatchNorm2d(dim)
-        self.q_lif = _make_lif(spike_mode)
-
+        self.q_lif = lif()
         self.k_conv = nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias)
         self.k_bn = nn.BatchNorm2d(dim)
-        self.k_lif = _make_lif(spike_mode)
-
+        self.k_lif = lif()
         self.v_conv = nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias)
         self.v_bn = nn.BatchNorm2d(dim)
-        self.v_lif = _make_lif(spike_mode)
-
-        self.talking_heads_lif = _make_lif(spike_mode, v_threshold=0.5)
-
+        self.v_lif = lif()
+        self.talking_heads_lif = lif(v_threshold=0.5)
         self.proj_conv = nn.Conv2d(dim, dim, kernel_size=1)
         self.proj_bn = nn.BatchNorm2d(dim)
 

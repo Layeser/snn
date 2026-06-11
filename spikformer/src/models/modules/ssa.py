@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from spikingjelly.clock_driven.neuron import MultiStepLIFNode
+
+from modules.spike import make_lif
 
 __all__ = ['SSA']
 
@@ -21,30 +22,40 @@ class SSA(nn.Module):
       Dh = D // Hh  (dimension par tête, ex. 256/8=32)
     """
 
-    def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
+    def __init__(
+        self,
+        dim,
+        num_heads=8,
+        qkv_bias=False,
+        attn_drop=0.,
+        proj_drop=0.,
+        lif_backend="auto",
+    ):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} must be divisible by num_heads {num_heads}"
         self.dim = dim
         self.num_heads = num_heads
         self.scale = 0.125  # 1 / sqrt(Dh)  avec Dh=32 → 1/8 mais le papier utilise 0.125
 
+        lif = lambda v_th=None: make_lif(v_threshold=v_th, lif_backend=lif_backend)
+
         self.q_linear = nn.Linear(dim, dim, bias=qkv_bias)
         self.q_bn = nn.BatchNorm1d(dim)
-        self.q_lif = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.q_lif = lif()
 
         self.k_linear = nn.Linear(dim, dim, bias=qkv_bias)
         self.k_bn = nn.BatchNorm1d(dim)
-        self.k_lif = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.k_lif = lif()
 
         self.v_linear = nn.Linear(dim, dim, bias=qkv_bias)
         self.v_bn = nn.BatchNorm1d(dim)
-        self.v_lif = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.v_lif = lif()
 
-        self.attn_lif = MultiStepLIFNode(tau=2.0, v_threshold=0.5, detach_reset=True)
+        self.attn_lif = lif(v_th=0.5)
 
         self.proj_linear = nn.Linear(dim, dim)
         self.proj_bn = nn.BatchNorm1d(dim)
-        self.proj_lif = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.proj_lif = lif()
 
     def forward(self, x):
         T, B, N, D = x.shape  # ex. (4, B, 64, 256)

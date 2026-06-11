@@ -6,7 +6,8 @@ emb_dim: 256
 depth: 2
 num_heads: 8
 T: 4
-num_workers: 4  # WSL : mettre 0 si le DataLoader semble bloquer
+num_workers: 0  # WSL : mettre 0 si le DataLoader semble bloquer
+lif_backend: auto
 data_dir: /home/layesekou/masterds/internship/data
 save_dir: /home/layesekou/masterds/internship/snn/A2OS2A/save
 device: cuda

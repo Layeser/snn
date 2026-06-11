@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from loaders.cifar import get_cifar10_loaders
 from models import Spikformer
+from modules.spike import resolve_lif_backend
 from utils.config import parse_train_args
 from utils.config_schema import SPIKFORMER_CONFIG_SCHEMA, validate_spikformer_config
 from utils.device import resolve_device
@@ -48,6 +49,7 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
     p.add_argument("--num-heads", type=int, default=config["num_heads"])
     p.add_argument("--T", type=int, default=config["T"])
     p.add_argument("--num-workers", type=int, default=config["num_workers"])
+    p.add_argument("--lif-backend", type=str, default=config["lif_backend"])
     p.add_argument("--data-dir", type=str, default=config["data_dir"])
     p.add_argument("--save-dir", type=str, default=config["save_dir"])
     p.add_argument("--device", type=str, default=config["device"])
@@ -66,7 +68,14 @@ def main():
     save_dir = Path(args.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    lif_backend = resolve_lif_backend(args.lif_backend)
     print(f"Device: {device}")
+    print(f"LIF backend: {lif_backend} (config lif_backend={args.lif_backend})")
+    if lif_backend == "torch" and str(device) == "cuda":
+        print(
+            "Astuce: installe cupy pour accélérer les neurones LIF sur GPU "
+            "(pip install cupy-cuda12x selon ta version CUDA)"
+        )
     print(
         f"Hyperparamètres: epochs={args.epochs}, batch_size={args.batch_size}, "
         f"lr={args.lr}, embed_dim={args.embed_dim}, depth={args.depth}, T={args.T}"
@@ -87,6 +96,7 @@ def main():
         embed_dim=args.embed_dim,
         depth=args.depth,
         num_heads=args.num_heads,
+        lif_backend=args.lif_backend,
         T=args.T,
     ).to(device)
 
@@ -108,6 +118,7 @@ def main():
                 "num_heads": args.num_heads,
                 "T": args.T,
                 "num_workers": args.num_workers,
+                "lif_backend": lif_backend,
                 "device": str(device),
             }
         )

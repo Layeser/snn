@@ -14,6 +14,7 @@ SPIKDRIVEN_CONFIG_SCHEMA: Schema = {
     "num_workers": (int, "non_negative"),
     "pooling_stat": (str, None),
     "spike_mode": (str, None),
+    "lif_backend": (str, None),
     "data_dir": (str, None),
     "save_dir": (str, None),
     "device": (str, None),
@@ -32,5 +33,9 @@ def validate_spikdriven_config(config: dict[str, Any]) -> None:
         )
     if config["spike_mode"] not in ("lif", "plif"):
         raise ValueError(f"spike_mode doit être 'lif' ou 'plif' (reçu: {config['spike_mode']!r})")
+    if config["lif_backend"] not in ("auto", "torch", "cupy"):
+        raise ValueError(
+            f"lif_backend doit être 'auto', 'torch' ou 'cupy' (reçu: {config['lif_backend']!r})"
+        )
     if config["device"] is not None and config["device"] not in ("cuda", "cpu"):
         raise ValueError(f"'device' doit être 'cuda' ou 'cpu' (reçu: {config['device']!r})")

@@ -1,5 +1,6 @@
 import torch.nn as nn
-from spikingjelly.clock_driven.neuron import MultiStepLIFNode, MultiStepParametricLIFNode
+
+from modules.spike import make_lif
 
 __all__ = ["ClassificationHead"]
 
@@ -15,14 +16,9 @@ class ClassificationHead(nn.Module):
     (différent de Spikformer qui fait mean temps avant la Linear)
     """
 
-    def __init__(self, embed_dim, num_classes, spike_mode="lif"):
+    def __init__(self, embed_dim, num_classes, spike_mode="lif", lif_backend="auto"):
         super().__init__()
-        if spike_mode == "lif":
-            self.head_lif = MultiStepLIFNode(tau=2.0, detach_reset=True)
-        elif spike_mode == "plif":
-            self.head_lif = MultiStepParametricLIFNode(init_tau=2.0, detach_reset=True)
-        else:
-            raise NotImplementedError(f"Unsupported spike mode: {spike_mode}")
+        self.head_lif = make_lif(spike_mode, lif_backend=lif_backend)
         self.fc = nn.Linear(embed_dim, num_classes)
 
     def forward(self, x):

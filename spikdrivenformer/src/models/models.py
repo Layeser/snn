@@ -24,6 +24,7 @@ class MS_Block_Conv(nn.Module):
         mlp_ratio=4.0,
         qkv_bias=False,
         spike_mode="lif",
+        lif_backend="auto",
         dvs=False,
         layer=0,
     ):
@@ -33,6 +34,7 @@ class MS_Block_Conv(nn.Module):
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             spike_mode=spike_mode,
+            lif_backend=lif_backend,
             dvs=dvs,
             layer=layer,
         )
@@ -41,6 +43,7 @@ class MS_Block_Conv(nn.Module):
             in_features=dim,
             hidden_features=mlp_hidden_dim,
             spike_mode=spike_mode,
+            lif_backend=lif_backend,
             layer=layer,
         )
 
@@ -87,6 +90,7 @@ class SpikeDrivenTransformer(nn.Module):
         drop_path_rate=0.0,
         pooling_stat="0011",
         spike_mode="lif",
+        lif_backend="auto",
         dvs=False,
         T=4,
     ):
@@ -94,6 +98,7 @@ class SpikeDrivenTransformer(nn.Module):
         self.T = T
         self.num_classes = num_classes
         self.depth = depth
+        self.lif_backend = lif_backend
 
         self.patch_embed = SPS(
             img_size_h=img_size,
@@ -103,6 +108,7 @@ class SpikeDrivenTransformer(nn.Module):
             embed_dims=embed_dim,
             pooling_stat=pooling_stat,
             spike_mode=spike_mode,
+            lif_backend=lif_backend,
         )
         self.blocks = nn.ModuleList(
             [
@@ -112,6 +118,7 @@ class SpikeDrivenTransformer(nn.Module):
                     mlp_ratio=mlp_ratio,
                     qkv_bias=qkv_bias,
                     spike_mode=spike_mode,
+                    lif_backend=lif_backend,
                     dvs=dvs,
                     layer=i,
                 )
@@ -119,7 +126,9 @@ class SpikeDrivenTransformer(nn.Module):
             ]
         )
         self.head = (
-            ClassificationHead(embed_dim, num_classes, spike_mode=spike_mode)
+            ClassificationHead(
+                embed_dim, num_classes, spike_mode=spike_mode, lif_backend=lif_backend
+            )
             if num_classes > 0
             else nn.Identity()
         )

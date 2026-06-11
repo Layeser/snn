@@ -4,3 +4,5 @@ spikingjelly
 tqdm
 pyyaml
 mlflow
+# Optionnel (GPU, accélère les LIF comme le repo officiel) :
+# cupy-cuda12x

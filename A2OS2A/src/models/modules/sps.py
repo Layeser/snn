@@ -1,5 +1,6 @@
 import torch.nn as nn
-from spikingjelly.clock_driven.neuron import MultiStepLIFNode
+
+from modules.spike import make_lif
 
 __all__ = ["SPS"]
 
@@ -12,8 +13,17 @@ class SPS(nn.Module):
     Sortie  : (T, B, N, D)          membrane U0 après RPE  ex. (4, B, 64, 256)
     """
 
-    def __init__(self, img_size_h=32, img_size_w=32, patch_size=(4, 4), in_channels=3, embed_dims=256):
+    def __init__(
+        self,
+        img_size_h=32,
+        img_size_w=32,
+        patch_size=(4, 4),
+        in_channels=3,
+        embed_dims=256,
+        lif_backend="auto",
+    ):
         super().__init__()
+        lif = lambda: make_lif(lif_backend=lif_backend)
         self.image_size = (img_size_h, img_size_w)
         self.patch_size = patch_size
         self.H = img_size_h // patch_size[0]
@@ -21,25 +31,25 @@ class SPS(nn.Module):
 
         self.proj_conv = nn.Conv2d(in_channels, embed_dims // 8, 3, 1, 1, bias=False)
         self.proj_bn = nn.BatchNorm2d(embed_dims // 8)
-        self.proj_lif = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.proj_lif = lif()
 
         self.proj_conv1 = nn.Conv2d(embed_dims // 8, embed_dims // 4, 3, 1, 1, bias=False)
         self.proj_bn1 = nn.BatchNorm2d(embed_dims // 4)
-        self.proj_lif1 = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.proj_lif1 = lif()
 
         self.proj_conv2 = nn.Conv2d(embed_dims // 4, embed_dims // 2, 3, 1, 1, bias=False)
         self.proj_bn2 = nn.BatchNorm2d(embed_dims // 2)
-        self.proj_lif2 = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.proj_lif2 = lif()
         self.maxpool2 = nn.MaxPool2d(3, 2, 1)
 
         self.proj_conv3 = nn.Conv2d(embed_dims // 2, embed_dims, 3, 1, 1, bias=False)
         self.proj_bn3 = nn.BatchNorm2d(embed_dims)
-        self.proj_lif3 = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.proj_lif3 = lif()
         self.maxpool3 = nn.MaxPool2d(3, 2, 1)
 
         self.rpe_conv = nn.Conv2d(embed_dims, embed_dims, 3, 1, 1, bias=False)
         self.rpe_bn = nn.BatchNorm2d(embed_dims)
-        self.rpe_lif = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.rpe_lif = lif()
 
     def forward(self, x):
         T, B, C, H, W = x.shape

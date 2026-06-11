@@ -1,7 +1,7 @@
 import torch.nn as nn
-from spikingjelly.clock_driven.neuron import MultiStepLIFNode
 
 from modules.sps import SPS
+from modules.spike import make_lif
 from modules.a2os2a import A2OS2A
 from modules.mlp import MLP
 from modules.head import ClassificationHead
@@ -17,12 +17,12 @@ class Block(nn.Module):
     Sortie  : s_out, u_out
     """
 
-    def __init__(self, dim, num_heads=8, mlp_ratio=4.0, qkv_bias=False):
+    def __init__(self, dim, num_heads=8, mlp_ratio=4.0, qkv_bias=False, lif_backend="auto"):
         super().__init__()
-        self.sn = MultiStepLIFNode(tau=2.0, detach_reset=True)
-        self.attn = A2OS2A(dim, num_heads=num_heads, qkv_bias=qkv_bias)
+        self.sn = make_lif(lif_backend=lif_backend)
+        self.attn = A2OS2A(dim, num_heads=num_heads, qkv_bias=qkv_bias, lif_backend=lif_backend)
         mlp_hidden = int(dim * mlp_ratio)
-        self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden)
+        self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden, lif_backend=lif_backend)
 
     def forward(self, s, u):
         u_prime = self.attn(s) + u                                         # eq. 15
@@ -59,6 +59,7 @@ class A2OS2ATransformer(nn.Module):
         num_heads=8,
         mlp_ratio=4.0,
         qkv_bias=False,
+        lif_backend="auto",
         T=4,
     ):
         super().__init__()
@@ -71,11 +72,18 @@ class A2OS2ATransformer(nn.Module):
             patch_size=(patch_size, patch_size),
             in_channels=in_channels,
             embed_dims=embed_dim,
+            lif_backend=lif_backend,
         )
-        self.s0_sn = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.s0_sn = make_lif(lif_backend=lif_backend)
         self.blocks = nn.ModuleList(
             [
-                Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias)
+                Block(
+                    dim=embed_dim,
+                    num_heads=num_heads,
+                    mlp_ratio=mlp_ratio,
+                    qkv_bias=qkv_bias,
+                    lif_backend=lif_backend,
+                )
                 for _ in range(depth)
             ]
         )

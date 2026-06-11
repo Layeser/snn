@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from loaders.cifar import get_cifar10_loaders
 from models import SpikeDrivenTransformer
+from modules.spike import resolve_lif_backend
 from utils.config import parse_train_args
 from utils.config_schema import SPIKDRIVEN_CONFIG_SCHEMA, validate_spikdriven_config
 from utils.device import resolve_device
@@ -50,6 +51,7 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
     p.add_argument("--num-workers", type=int, default=config["num_workers"])
     p.add_argument("--pooling-stat", type=str, default=config["pooling_stat"])
     p.add_argument("--spike-mode", type=str, default=config["spike_mode"])
+    p.add_argument("--lif-backend", type=str, default=config["lif_backend"])
     p.add_argument("--data-dir", type=str, default=config["data_dir"])
     p.add_argument("--save-dir", type=str, default=config["save_dir"])
     p.add_argument("--device", type=str, default=config["device"])
@@ -68,7 +70,14 @@ def main():
     save_dir = Path(args.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    lif_backend = resolve_lif_backend(args.lif_backend)
     print(f"Device: {device}")
+    print(f"LIF backend: {lif_backend} (config lif_backend={args.lif_backend})")
+    if lif_backend == "torch" and str(device) == "cuda":
+        print(
+            "Astuce: installe cupy pour accélérer les neurones LIF sur GPU "
+            "(pip install cupy-cuda12x selon ta version CUDA)"
+        )
     print(
         f"Hyperparamètres: epochs={args.epochs}, batch_size={args.batch_size}, "
         f"lr={args.lr}, embed_dim={args.embed_dim}, depth={args.depth}, "
@@ -92,6 +101,7 @@ def main():
         num_heads=args.num_heads,
         pooling_stat=args.pooling_stat,
         spike_mode=args.spike_mode,
+        lif_backend=args.lif_backend,
         T=args.T,
     ).to(device)
 
@@ -115,6 +125,7 @@ def main():
                 "num_workers": args.num_workers,
                 "pooling_stat": args.pooling_stat,
                 "spike_mode": args.spike_mode,
+                "lif_backend": lif_backend,
                 "device": str(device),
             }
         )

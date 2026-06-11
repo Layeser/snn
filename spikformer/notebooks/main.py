@@ -1,2 +1,5 @@
-def sum(a, b):
-    return a + b
+from pathlib import Path
+
+
+project_root = Path(__file__).resolve().parents[1]
+print(project_root)

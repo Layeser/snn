@@ -1,19 +1,9 @@
 import torch
 import torch.nn as nn
-from spikingjelly.clock_driven.neuron import MultiStepLIFNode, MultiStepParametricLIFNode
+
+from modules.spike import make_lif
 
 __all__ = ["STAtten"]
-
-
-def _make_lif(spike_mode: str, v_threshold: float | None = None):
-    kwargs = {"detach_reset": True}
-    if v_threshold is not None:
-        kwargs["v_threshold"] = v_threshold
-    if spike_mode == "lif":
-        return MultiStepLIFNode(tau=2.0, **kwargs)
-    if spike_mode == "plif":
-        return MultiStepParametricLIFNode(init_tau=2.0, **kwargs)
-    raise NotImplementedError(f"Unsupported spike mode: {spike_mode}")
 
 
 class DvsPooling(nn.Module):
@@ -43,6 +33,7 @@ class STAtten(nn.Module):
         dim,
         num_heads=8,
         spike_mode="lif",
+        lif_backend="auto",
         dvs=False,
         layer=0,
         attention_mode="STAtten",
@@ -62,22 +53,21 @@ class STAtten(nn.Module):
         if dvs:
             self.pool = DvsPooling()
 
-        self.shortcut_lif = _make_lif(spike_mode)
+        def lif(v_threshold=None):
+            return make_lif(spike_mode, v_threshold=v_threshold, lif_backend=lif_backend)
 
+        self.shortcut_lif = lif()
         self.q_conv = nn.Conv2d(dim, dim, kernel_size=1, bias=False)
         self.q_bn = nn.BatchNorm2d(dim)
-        self.q_lif = _make_lif(spike_mode)
-
+        self.q_lif = lif()
         self.k_conv = nn.Conv2d(dim, dim, kernel_size=1, bias=False)
         self.k_bn = nn.BatchNorm2d(dim)
-        self.k_lif = _make_lif(spike_mode)
-
+        self.k_lif = lif()
         self.v_conv = nn.Conv2d(dim, dim, kernel_size=1, bias=False)
         self.v_bn = nn.BatchNorm2d(dim)
-        self.v_lif = _make_lif(spike_mode)
-
-        self.attn_lif = _make_lif(spike_mode, v_threshold=0.5)
-        self.talking_heads_lif = _make_lif(spike_mode, v_threshold=0.5)
+        self.v_lif = lif()
+        self.attn_lif = lif(v_threshold=0.5)
+        self.talking_heads_lif = lif(v_threshold=0.5)
 
         self.proj_conv = nn.Conv2d(dim, dim, kernel_size=1)
         self.proj_bn = nn.BatchNorm2d(dim)

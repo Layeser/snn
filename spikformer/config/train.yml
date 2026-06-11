@@ -7,6 +7,7 @@ depth: 4
 num_heads: 8
 T: 4
 num_workers: 0  # WSL : mettre 0 si le DataLoader semble bloquer
+lif_backend: auto  # auto → cupy sur GPU si installé, sinon torch
 data_dir: /home/layesekou/masterds/internship/data
 save_dir: /home/layesekou/masterds/internship/snn/spikformer/save
 device: cuda

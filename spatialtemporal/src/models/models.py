@@ -22,6 +22,7 @@ class MS_Block_Conv(nn.Module):
         num_heads,
         mlp_ratio=4.0,
         spike_mode="lif",
+        lif_backend="auto",
         dvs=False,
         layer=0,
         attention_mode="STAtten",
@@ -32,6 +33,7 @@ class MS_Block_Conv(nn.Module):
             dim,
             num_heads=num_heads,
             spike_mode=spike_mode,
+            lif_backend=lif_backend,
             dvs=dvs,
             layer=layer,
             attention_mode=attention_mode,
@@ -42,6 +44,7 @@ class MS_Block_Conv(nn.Module):
             in_features=dim,
             hidden_features=mlp_hidden_dim,
             spike_mode=spike_mode,
+            lif_backend=lif_backend,
             layer=layer,
         )
 
@@ -87,6 +90,7 @@ class STAttenTransformer(nn.Module):
         mlp_ratio=4.0,
         pooling_stat="0011",
         spike_mode="lif",
+        lif_backend="auto",
         attention_mode="STAtten",
         chunk_size=2,
         dvs=False,
@@ -109,6 +113,7 @@ class STAttenTransformer(nn.Module):
             embed_dims=embed_dim,
             pooling_stat=pooling_stat,
             spike_mode=spike_mode,
+            lif_backend=lif_backend,
         )
         self.blocks = nn.ModuleList(
             [
@@ -117,6 +122,7 @@ class STAttenTransformer(nn.Module):
                     num_heads=num_heads,
                     mlp_ratio=mlp_ratio,
                     spike_mode=spike_mode,
+                    lif_backend=lif_backend,
                     dvs=dvs,
                     layer=i,
                     attention_mode=attention_mode,
@@ -126,7 +132,9 @@ class STAttenTransformer(nn.Module):
             ]
         )
         self.head = (
-            ClassificationHead(embed_dim, num_classes, spike_mode=spike_mode)
+            ClassificationHead(
+                embed_dim, num_classes, spike_mode=spike_mode, lif_backend=lif_backend
+            )
             if num_classes > 0
             else nn.Identity()
         )

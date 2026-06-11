@@ -23,14 +23,22 @@ class Block(nn.Module):
         drop=0.0,
         attn_drop=0.0,
         drop_path=0.0,
+        lif_backend="auto",
     ):
         super().__init__()
         # LayerNorm présent dans le repo officiel mais non utilisé dans forward — à brancher si besoin.
         self.norm1 = nn.LayerNorm(dim)
-        self.attn = SSA(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+        self.attn = SSA(
+            dim,
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=drop,
+            lif_backend=lif_backend,
+        )
         self.norm2 = nn.LayerNorm(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim, drop=drop)
+        self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim, drop=drop, lif_backend=lif_backend)
 
     def forward(self, x):
         # Référence officielle CIFAR : résidu direct (sans norm). Décommenter pour pre-norm :
@@ -76,6 +84,7 @@ class Spikformer(nn.Module):
         drop_rate=0.0,
         attn_drop_rate=0.0,
         drop_path_rate=0.0,
+        lif_backend="auto",
         T=4,
     ):
         super().__init__()
@@ -90,6 +99,7 @@ class Spikformer(nn.Module):
             patch_size=(patch_size, patch_size),
             in_channels=in_channels,
             embed_dims=embed_dim,
+            lif_backend=lif_backend,
         )
         self.blocks = nn.ModuleList(
             [
@@ -101,6 +111,7 @@ class Spikformer(nn.Module):
                     drop=drop_rate,
                     attn_drop=attn_drop_rate,
                     drop_path=dpr[i],
+                    lif_backend=lif_backend,
                 )
                 for i in range(depth)
             ]

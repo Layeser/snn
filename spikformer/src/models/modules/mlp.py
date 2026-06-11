@@ -1,5 +1,6 @@
 import torch.nn as nn
-from spikingjelly.clock_driven.neuron import MultiStepLIFNode
+
+from modules.spike import make_lif
 
 __all__ = ['MLP']
 
@@ -19,20 +20,22 @@ class MLP(nn.Module):
       H  = hidden_features = D * mlp_ratio  (ex. 256×4 = 1024)
     """
 
-    def __init__(self, in_features, hidden_features=None, out_features=None, drop=0.):
+    def __init__(self, in_features, hidden_features=None, out_features=None, drop=0., lif_backend="auto"):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
         self.c_hidden = hidden_features
         self.c_output = out_features
 
+        lif = lambda: make_lif(lif_backend=lif_backend)
+
         self.fc1 = nn.Linear(in_features, hidden_features)
         self.fc1_bn = nn.BatchNorm1d(hidden_features)
-        self.fc1_lif = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.fc1_lif = lif()
 
         self.fc2 = nn.Linear(hidden_features, out_features)
         self.fc2_bn = nn.BatchNorm1d(out_features)
-        self.fc2_lif = MultiStepLIFNode(tau=2.0, detach_reset=True)
+        self.fc2_lif = lif()
 
     def forward(self, x):
         T, B, N, D = x.shape  # ex. (4, B, 64, 256)

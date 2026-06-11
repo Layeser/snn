@@ -15,6 +15,7 @@ STATTEN_CONFIG_SCHEMA: Schema = {
     "num_workers": (int, "non_negative"),
     "pooling_stat": (str, None),
     "spike_mode": (str, None),
+    "lif_backend": (str, None),
     "attention_mode": (str, None),
     "data_dir": (str, None),
     "save_dir": (str, None),
@@ -38,6 +39,10 @@ def validate_stattn_config(config: dict[str, Any]) -> None:
         )
     if config["spike_mode"] not in ("lif", "plif"):
         raise ValueError(f"spike_mode doit être 'lif' ou 'plif' (reçu: {config['spike_mode']!r})")
+    if config["lif_backend"] not in ("auto", "torch", "cupy"):
+        raise ValueError(
+            f"lif_backend doit être 'auto', 'torch' ou 'cupy' (reçu: {config['lif_backend']!r})"
+        )
     if config["attention_mode"] not in ("STAtten", "SDT"):
         raise ValueError(
             f"attention_mode doit être 'STAtten' ou 'SDT' (reçu: {config['attention_mode']!r})"

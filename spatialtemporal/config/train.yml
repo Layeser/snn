@@ -1,4 +1,4 @@
-epochs: 15
+epochs: 2
 batch_size: 64
 learning_rate: 0.0003
 weight_decay: 0.06
@@ -10,6 +10,7 @@ chunk_size: 2
 num_workers: 0
 pooling_stat: "0011"
 spike_mode: lif
+lif_backend: auto
 attention_mode: STAtten
 data_dir: /home/layesekou/masterds/internship/data
 save_dir: /home/layesekou/masterds/internship/snn/spatialtemporal/save

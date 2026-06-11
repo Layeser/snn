@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from spikingjelly.clock_driven.neuron import MultiStepLIFNode
 
+from modules.spike import make_lif
 from modules.ternary_lif import MultiStepTernaryLIFNode
 
 __all__ = ["A2OS2A"]
@@ -21,15 +21,17 @@ class A2OS2A(nn.Module):
     Sortie  : (T, B, N, D)  spikes après SN
     """
 
-    def __init__(self, dim, num_heads=8, qkv_bias=False):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, lif_backend="auto"):
         super().__init__()
         assert dim % num_heads == 0
         self.dim = dim
         self.num_heads = num_heads
 
+        lif = lambda: make_lif(lif_backend=lif_backend)
+
         self.q_linear = nn.Linear(dim, dim, bias=qkv_bias)
         self.q_bn = nn.BatchNorm1d(dim)
-        self.q_lif = MultiStepLIFNode(tau=2.0, detach_reset=True)          # binaire
+        self.q_lif = lif()                                                   # binaire
 
         self.k_linear = nn.Linear(dim, dim, bias=qkv_bias)
         self.k_bn = nn.BatchNorm1d(dim)
@@ -37,9 +39,9 @@ class A2OS2A(nn.Module):
 
         self.v_linear = nn.Linear(dim, dim, bias=qkv_bias)
         self.v_bn = nn.BatchNorm1d(dim)
-        self.v_lif = MultiStepTernaryLIFNode(tau=2.0, v_threshold=1.0)     # ternaire
+        self.v_lif = MultiStepTernaryLIFNode(tau=2.0, v_threshold=1.0)     # ternaire (custom)
 
-        self.out_lif = MultiStepLIFNode(tau=2.0, detach_reset=True)        # SN final
+        self.out_lif = lif()                                                 # SN final
 
     def _bn_linear(self, x, linear, bn):
         T, B, N, D = x.shape
