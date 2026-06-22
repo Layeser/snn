@@ -1,0 +1,7 @@
+torch
+torchvision
+spikingjelly
+tqdm
+pyyaml
+mlflow
+# Optionnel (GPU, accélère les LIF) : cupy-cuda12x

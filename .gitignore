@@ -1,2 +1,61 @@
-# Notes personnelles / brouillons (non versionnés)
+# --- Projet ---
 Notes/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# --- Environnements virtuels ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- IDE / éditeur ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Données (CIFAR, etc.) — ne pas versionner ---
+data/
+**/data/cifar-10-*
+
+# --- Entraînement : checkpoints, logs, MLflow ---
+**/save/
+**/mlruns/
+*.pt
+*.pt.tmp
+*.pth
+*.ckpt
+train.log
+metrics.jsonl
+run.out
+run.err
+
+# --- Tracking expériences ---
+wandb/
+.mlflow/

@@ -1,5 +1,7 @@
 """Validation des hyperparamètres de recette d'entraînement CIFAR."""
 
+
+from __future__ import annotations
 from typing import Any
 
 TRAINING_RECIPE_SCHEMA: dict[str, tuple[type, str | None]] = {

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 from spikingjelly.clock_driven.neuron import MultiStepLIFNode, MultiStepParametricLIFNode
 

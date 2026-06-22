@@ -3,6 +3,7 @@
 Entraînement HP-STAtten (Proposition A) sur CIFAR-10.
 
 Fusion STAtten + A²OS²A + backbone SDT.
+Reprise : save_dir/last.pt (--resume auto) ou --fresh pour repartir de zéro.
 Référence : Notes/proprosition.md
 """
 import argparse
@@ -10,7 +11,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import mlflow
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,17 +24,12 @@ sys.path.insert(0, str(ROOT / "src"))
 from loaders.cifar import get_cifar10_loaders
 from models import HPSTAttenTransformer
 from modules.spike import resolve_lif_backend
+from train_cli import add_checkpoint_args
 from train_integration import build_criterion, build_scheduler, loader_kwargs_from_config, recipe_hyperparams
+from training_runner import run_training
 from utils.config import parse_train_args
 from utils.config_schema import HPSTATTEN_CONFIG_SCHEMA, validate_hpstattn_config
 from utils.device import resolve_device
-from utils.mlflow_tracking import (
-    log_artifacts,
-    log_epoch_metrics,
-    log_final_metrics,
-    log_hyperparameters,
-    setup_experiment,
-)
 from utils.training import train_one_epoch, validate
 
 
@@ -58,6 +53,7 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
     p.add_argument("--data-dir", type=str, default=config["data_dir"])
     p.add_argument("--save-dir", type=str, default=config["save_dir"])
     p.add_argument("--device", type=str, default=config["device"])
+    add_checkpoint_args(p)
     return p
 
 
@@ -74,7 +70,6 @@ def main():
     print(f"Config validée: {args.config}")
     device = resolve_device(args.device)
     save_dir = Path(args.save_dir)
-    save_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Device: {device}")
     print(f"LIF backend: {lif_backend} (config lif_backend={args.lif_backend})")
@@ -119,72 +114,41 @@ def main():
     )
     scheduler = build_scheduler(optimizer, config, args.epochs)
 
-    setup_experiment(MLFLOW_EXPERIMENT)
-    with mlflow.start_run():
-        log_hyperparameters(
-            {
-                "epochs": args.epochs,
-                "batch_size": args.batch_size,
-                "learning_rate": args.lr,
-                "weight_decay": args.weight_decay,
-                "embed_dim": args.embed_dim,
-                "depth": args.depth,
-                "num_heads": args.num_heads,
-                "T": args.T,
-                "chunk_size": args.chunk_size,
-                "pooling_stat": args.pooling_stat,
-                "spike_mode": args.spike_mode,
-                "lif_backend": lif_backend,
-                "hybrid_qkv": hybrid_qkv,
-                "num_workers": args.num_workers,
-                "device": str(device),
-                **recipe_hyperparams(config),
-            }
-        )
-
-        best_val_acc = 0.0
-        best_epoch = 0
-        ckpt = save_dir / "best.pt"
-
-        for epoch in range(1, args.epochs + 1):
-            print(f"\n--- Epoch {epoch}/{args.epochs} ---")
-            train_loss, train_acc = train_one_epoch(
-                model, train_loader, criterion, optimizer, device, mixup_alpha=config["mixup"]
-            )
-            val_loss, val_acc = validate(model, val_loader, criterion, device)
-
-            if scheduler is not None:
-                scheduler.step()
-
-            log_epoch_metrics(epoch, train_loss, train_acc, val_loss, val_acc)
-
-            print(
-                f"Epoch {epoch:03d}/{args.epochs} | "
-                f"train loss {train_loss:.4f} acc {train_acc:.2f}% | "
-                f"val loss {val_loss:.4f} acc {val_acc:.2f}%"
-            )
-
-            if val_acc > best_val_acc:
-                best_val_acc = val_acc
-                best_epoch = epoch
-                torch.save(
-                    {
-                        "epoch": epoch,
-                        "model_state_dict": model.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "val_acc": val_acc,
-                        "config": config,
-                        "args": vars(args),
-                    },
-                    ckpt,
-                )
-                print(f"  → meilleur modèle sauvegardé ({val_acc:.2f}%) → {ckpt}")
-
-        log_final_metrics(best_val_acc, best_epoch)
-        log_artifacts(args.config, ckpt)
-
-        print(f"Entraînement terminé. Meilleure val accuracy: {best_val_acc:.2f}% (epoch {best_epoch})")
-        print(f"MLflow experiment: {MLFLOW_EXPERIMENT}")
+    run_training(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        criterion=criterion,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        device=device,
+        config=config,
+        args=args,
+        save_dir=save_dir,
+        experiment_name=MLFLOW_EXPERIMENT,
+        hyperparams={
+            "epochs": args.epochs,
+            "batch_size": args.batch_size,
+            "learning_rate": args.lr,
+            "weight_decay": args.weight_decay,
+            "embed_dim": args.embed_dim,
+            "depth": args.depth,
+            "num_heads": args.num_heads,
+            "T": args.T,
+            "chunk_size": args.chunk_size,
+            "pooling_stat": args.pooling_stat,
+            "spike_mode": args.spike_mode,
+            "lif_backend": lif_backend,
+            "hybrid_qkv": hybrid_qkv,
+            "num_workers": args.num_workers,
+            "device": str(device),
+            **recipe_hyperparams(config),
+        },
+        train_one_epoch=train_one_epoch,
+        validate=validate,
+        mismatch_keys=("embed_dim", "depth", "num_heads", "T", "batch_size", "chunk_size"),
+        run_name_prefix="hpstattn",
+    )
 
 
 if __name__ == "__main__":

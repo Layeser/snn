@@ -1,5 +1,3 @@
-train:
-	python -m scripts.train
-
-smoke:
-	python scripts/smoke_test.py
+PROJECT := spatialtemporal
+include ../mk/vars.mk
+include ../mk/train.mk

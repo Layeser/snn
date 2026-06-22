@@ -1,3 +1,3 @@
-
-train:
-	python -m scripts.train
+PROJECT := spikdrivenformer
+include ../mk/vars.mk
+include ../mk/train.mk
