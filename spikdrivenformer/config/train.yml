@@ -1,4 +1,4 @@
-epochs: 2
+epochs: 200
 batch_size: 64
 learning_rate: 0.0005
 weight_decay: 0.06
@@ -6,10 +6,18 @@ emb_dim: 256
 depth: 4
 num_heads: 8
 T: 4
-num_workers: 0  # WSL : mettre 0 si le DataLoader semble bloquer
+num_workers: 0
 pooling_stat: "0011"
 spike_mode: lif
-lif_backend: auto  # auto → cupy sur GPU si installé (repo officiel), sinon torch
+lif_backend: auto
+augment_train: "true"
+rand_augment: "true"
+random_erasing: 0.25
+mixup: 0.5
+label_smoothing: 0.1
+scheduler: cosine
+warmup_epochs: 20
+min_lr: 1.0e-5
 data_dir: /home/layesekou/masterds/internship/data
 save_dir: /home/layesekou/masterds/internship/snn/spikdrivenformer/save
 device: cuda

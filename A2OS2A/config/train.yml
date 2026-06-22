@@ -1,4 +1,4 @@
-epochs: 2
+epochs: 200
 batch_size: 64
 learning_rate: 0.0003
 weight_decay: 0.06
@@ -6,8 +6,16 @@ emb_dim: 256
 depth: 2
 num_heads: 8
 T: 4
-num_workers: 0  # WSL : mettre 0 si le DataLoader semble bloquer
+num_workers: 0
 lif_backend: auto
+augment_train: "true"
+rand_augment: "true"
+random_erasing: 0.25
+mixup: 0.5
+label_smoothing: 0.1
+scheduler: cosine
+warmup_epochs: 20
+min_lr: 1.0e-5
 data_dir: /home/layesekou/masterds/internship/data
 save_dir: /home/layesekou/masterds/internship/snn/A2OS2A/save
 device: cuda

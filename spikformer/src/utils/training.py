@@ -1,11 +1,17 @@
+import sys
+from pathlib import Path
+
 import torch
 from spikingjelly.clock_driven import functional
 from tqdm import tqdm
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "common"))
+from training_recipe import mixup_criterion, mixup_data
+
 from utils.metrics import accuracy
 
 
-def train_one_epoch(model, loader, criterion, optimizer, device):
+def train_one_epoch(model, loader, criterion, optimizer, device, mixup_alpha=0.0):
     model.train()
     total_loss = 0.0
     total_acc = 0.0
@@ -17,14 +23,20 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
         labels = labels.to(device, non_blocking=True)
 
         functional.reset_net(model)
-        logits = model(images)
-        loss = criterion(logits, labels)
+        if mixup_alpha > 0:
+            images, labels_a, labels_b, lam = mixup_data(images, labels, mixup_alpha)
+            logits = model(images)
+            loss = mixup_criterion(criterion, logits, labels_a, labels_b, lam)
+            batch_acc = accuracy(logits, labels_a)
+        else:
+            logits = model(images)
+            loss = criterion(logits, labels)
+            batch_acc = accuracy(logits, labels)
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        batch_acc = accuracy(logits, labels)
         total_loss += loss.item()
         total_acc += batch_acc
         n_batches += 1

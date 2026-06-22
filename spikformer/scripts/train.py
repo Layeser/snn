@@ -12,18 +12,19 @@ from typing import Any
 
 import mlflow
 import torch
-import torch.nn as nn
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = ROOT / "config" / "train.yml"
 MLFLOW_EXPERIMENT = "Spikformer-CIFAR10"
 
+sys.path.insert(0, str(ROOT.parent / "common"))
 sys.path.insert(0, str(ROOT / "src" / "models"))
 sys.path.insert(0, str(ROOT / "src"))
 
 from loaders.cifar import get_cifar10_loaders
 from models import Spikformer
 from modules.spike import resolve_lif_backend
+from train_integration import build_criterion, build_scheduler, loader_kwargs_from_config, recipe_hyperparams
 from utils.config import parse_train_args
 from utils.config_schema import SPIKFORMER_CONFIG_SCHEMA, validate_spikformer_config
 from utils.device import resolve_device
@@ -86,6 +87,7 @@ def main():
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         download=True,
+        **loader_kwargs_from_config(config),
     )
     print(f"Train batches: {len(train_loader)} | Val batches: {len(val_loader)}")
 
@@ -100,10 +102,11 @@ def main():
         T=args.T,
     ).to(device)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = build_criterion(config)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
+    scheduler = build_scheduler(optimizer, config, args.epochs)
 
     setup_experiment(MLFLOW_EXPERIMENT)
     with mlflow.start_run():
@@ -120,6 +123,7 @@ def main():
                 "num_workers": args.num_workers,
                 "lif_backend": lif_backend,
                 "device": str(device),
+                **recipe_hyperparams(config),
             }
         )
 
@@ -130,9 +134,12 @@ def main():
         for epoch in range(1, args.epochs + 1):
             print(f"\n--- Epoch {epoch}/{args.epochs} ---")
             train_loss, train_acc = train_one_epoch(
-                model, train_loader, criterion, optimizer, device
+                model, train_loader, criterion, optimizer, device, mixup_alpha=config["mixup"]
             )
             val_loss, val_acc = validate(model, val_loader, criterion, device)
+
+            if scheduler is not None:
+                scheduler.step()
 
             log_epoch_metrics(epoch, train_loss, train_acc, val_loss, val_acc)
 

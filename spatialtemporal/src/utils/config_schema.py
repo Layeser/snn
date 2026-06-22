@@ -1,6 +1,12 @@
 from typing import Any
 
+import sys
+from pathlib import Path
+
 from utils.config import Schema
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2].parent / "common"))
+from config_training import TRAINING_RECIPE_SCHEMA, validate_training_recipe
 
 STATTEN_CONFIG_SCHEMA: Schema = {
     "epochs": (int, "positive"),
@@ -20,6 +26,7 @@ STATTEN_CONFIG_SCHEMA: Schema = {
     "data_dir": (str, None),
     "save_dir": (str, None),
     "device": (str, None),
+    **TRAINING_RECIPE_SCHEMA,
 }
 
 
@@ -49,3 +56,4 @@ def validate_stattn_config(config: dict[str, Any]) -> None:
         )
     if config["device"] is not None and config["device"] not in ("cuda", "cpu"):
         raise ValueError(f"'device' doit être 'cuda' ou 'cpu' (reçu: {config['device']!r})")
+    validate_training_recipe(config)
