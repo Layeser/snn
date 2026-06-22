@@ -40,17 +40,32 @@ def capture_rng_state() -> dict[str, Any]:
     return state
 
 
+def _as_torch_byte_tensor(raw: Any) -> torch.Tensor:
+    """Convertit un état RNG sérialisé en ByteTensor CPU (requis par torch.set_rng_state)."""
+    if isinstance(raw, torch.Tensor):
+        return raw.detach().cpu().to(torch.uint8).clone()
+    return torch.as_tensor(raw, dtype=torch.uint8)
+
+
 def restore_rng_state(state: dict[str, Any] | None) -> None:
     if not state:
         return
-    if "python" in state:
-        random.setstate(state["python"])
-    if "numpy" in state:
-        np.random.set_state(state["numpy"])
-    if "torch" in state:
-        torch.set_rng_state(state["torch"])
-    if "torch_cuda" in state and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(state["torch_cuda"])
+    try:
+        if "python" in state:
+            random.setstate(state["python"])
+        if "numpy" in state:
+            np.random.set_state(state["numpy"])
+        if "torch" in state:
+            torch.set_rng_state(_as_torch_byte_tensor(state["torch"]))
+        if "torch_cuda" in state and torch.cuda.is_available():
+            cuda_states = state["torch_cuda"]
+            if isinstance(cuda_states, (list, tuple)):
+                cuda_states = [_as_torch_byte_tensor(s) for s in cuda_states]
+            else:
+                cuda_states = _as_torch_byte_tensor(cuda_states)
+            torch.cuda.set_rng_state_all(cuda_states)
+    except Exception as exc:
+        print(f"  ⚠ état RNG non restauré (reprise continue): {exc}")
 
 
 def build_checkpoint_state(

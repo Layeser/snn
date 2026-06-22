@@ -7,9 +7,9 @@
 #   make job-status
 
 DATA_DIR ?= $(HOME)/internship/snn/data
-WALLTIME ?= 2:00:00
-OAR_PROJECT ?= interactivite
-OAR_GPU ?= gpu=1,besteffort
+
+SNN_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+include $(SNN_ROOT)/mk/grid5000.mk
 
 PROJECTS := spikformer spikdrivenformer spatialtemporal A2OS2A HPSTAtten
 
@@ -17,13 +17,12 @@ RESERVE_TARGETS := $(addprefix reserve-,$(PROJECTS))
 TRAIN_TARGETS := $(addprefix train-,$(PROJECTS))
 FRESH_TARGETS := $(addprefix train-fresh-,$(PROJECTS))
 
-SNN_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 VENV := $(SNN_ROOT)/.venv
 include $(SNN_ROOT)/mk/python.mk
 BOOTSTRAP_PYTHON ?= $(DETECTED_PYTHON)
 
-.PHONY: help job-status setup setup-venv setup-g5k list-python-modules check-deps print-python $(RESERVE_TARGETS) $(TRAIN_TARGETS) $(FRESH_TARGETS) \
-	reserve-all train-all
+.PHONY: help job-status setup setup-venv setup-g5k list-python-modules check-deps print-python interactive \
+	$(RESERVE_TARGETS) $(TRAIN_TARGETS) $(FRESH_TARGETS) reserve-all train-all
 
 help:
 	@echo "SNN — commandes racine"
@@ -39,7 +38,22 @@ help:
 	@echo "             module load $(G5K_PYTHON_MODULE)   # si besoin manuel"
 	@echo "  Forcer :   make setup BOOTSTRAP_PYTHON=/chemin/vers/python3.10"
 	@echo ""
-	@echo "Entraînement local (reprise auto depuis save/last.pt):"
+	@echo "─── Grid5000 : deux modes ───"
+	@echo ""
+	@echo "1) INTERACTIF (debug, MLflow ui, tests rapides)"
+	@echo "   Depuis la frontale :"
+	@echo "     make interactive              # oarsub -I → shell sur nœud GPU"
+	@echo "   Puis sur le nœud GPU :"
+	@echo "     make train-spikformer         # lance l'entraînement ici"
+	@echo "     cd spikformer && make logs"
+	@echo ""
+	@echo "2) BATCH (entraînement long, déconnexion OK)"
+	@echo "   Depuis la frontale (sans session interactive) :"
+	@echo "     make reserve-spikformer       # oarsub batch → job en arrière-plan"
+	@echo "     make job-status               # suivre le job"
+	@echo "     tail -f spikformer/save/run.out"
+	@echo ""
+	@echo "Entraînement (sur nœud GPU ou machine locale — pas depuis la frontale CPU):"
 	@echo "  make train-spikformer"
 	@echo "  make train-spikdrivenformer"
 	@echo "  make train-spatialtemporal"
@@ -48,16 +62,15 @@ help:
 	@echo "  make train-all"
 	@echo ""
 	@echo "From scratch:"
-	@echo "  make train-fresh-spikformer   (idem pour chaque projet)"
+	@echo "  make train-fresh-spikformer"
 	@echo ""
-	@echo "Réservation Grid5000 (oarsub, GPU besteffort):"
+	@echo "Réservation batch (depuis la frontale):"
 	@echo "  make reserve-spikformer"
 	@echo "  make reserve-hpstattn"
 	@echo "  make reserve-all"
 	@echo ""
-	@echo "Variantes oarsub (depuis le sous-projet):"
-	@echo "  cd HPSTAtten && make reserve-fresh"
-	@echo "  cd HPSTAtten && make reserve-resume"
+	@echo "Session GPU interactive (depuis la frontale):"
+	@echo "  make interactive   WALLTIME=$(INTERACTIVE_WALLTIME) via INTERACTIVE_WALLTIME=..."
 	@echo ""
 	@echo "Suivi:"
 	@echo "  make job-status"
@@ -65,12 +78,19 @@ help:
 	@echo ""
 	@echo "Variables globales:"
 	@echo "  DATA_DIR=$(DATA_DIR)"
-	@echo "  WALLTIME=$(WALLTIME)  OAR_GPU=$(OAR_GPU)  OAR_PROJECT=$(OAR_PROJECT)"
+	@echo "  WALLTIME=$(WALLTIME)  INTERACTIVE_WALLTIME=$(INTERACTIVE_WALLTIME)"
+	@echo "  OAR_GPU=$(OAR_GPU)  OAR_QUEUE=$(OAR_QUEUE)"
 	@echo ""
 	@echo "Aide détaillée par projet: cd spikformer && make help"
 
 job-status:
 	@oarstat -u $$USER 2>/dev/null || oarstat 2>/dev/null || echo "oarstat indisponible (hors Grid5000 ?)"
+
+# Réservation interactive GPU (frontale → shell sur nœud, puis make train-*)
+interactive:
+	@echo "→ Session interactive GPU ($(OAR_INTERACTIVE), $(INTERACTIVE_WALLTIME))"
+	@echo "  Une fois connecté au nœud : make train-spikformer"
+	$(OARSUB_INTERACTIVE)
 
 setup: setup-venv
 

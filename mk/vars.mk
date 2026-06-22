@@ -1,6 +1,7 @@
 # Variables partagées (override : make train DATA_DIR=/chemin/data)
 
 include $(dir $(lastword $(MAKEFILE_LIST)))python.mk
+include $(dir $(lastword $(MAKEFILE_LIST)))grid5000.mk
 
 PROJECT ?=
 SNN_ROOT := $(abspath $(CURDIR)/..)
@@ -14,10 +15,7 @@ VENV_VERSION_OK := $(call _python_version_ok,$(VENV_PYTHON))
 _DEFAULT_PYTHON := $(if $(and $(wildcard $(VENV_PYTHON)),$(filter yes,$(VENV_TORCH)),$(filter yes,$(VENV_VERSION_OK))),$(VENV_PYTHON),$(DETECTED_PYTHON))
 PYTHON ?= $(_DEFAULT_PYTHON)
 
-# Grid5000 / OAR
-WALLTIME ?= 2:00:00
-OAR_PROJECT ?= interactivite
-OAR_GPU ?= gpu=1,besteffort
+# Grid5000 / OAR (voir mk/grid5000.mk)
 OAR_JOB_NAME ?= $(PROJECT)_train
 
 PROJECT_DIR := $(abspath $(CURDIR))

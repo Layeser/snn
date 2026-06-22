@@ -9,10 +9,11 @@ help:
 	@echo "  make train-resume       Reprise explicite (--resume auto)"
 	@echo "  make train-from-last    Reprise depuis save/last.pt"
 	@echo ""
-	@echo "Grid5000 (oarsub, GPU besteffort):"
-	@echo "  make reserve            Soumet un job (reprise auto)"
-	@echo "  make reserve-fresh      Soumet un job from scratch"
-	@echo "  make reserve-resume       Soumet un job avec reprise explicite"
+	@echo "─── Grid5000 ───"
+	@echo "  make train / train-*   Sur le nœud GPU (après make interactive)"
+	@echo "  make reserve           Batch depuis la frontale (oarsub sans -I)"
+	@echo "  make reserve-fresh     Batch, from scratch"
+	@echo "  make reserve-resume    Batch, reprise explicite"
 	@echo ""
 	@echo "Suivi:"
 	@echo "  make logs               tail -f save/train.log"
@@ -65,21 +66,21 @@ train-from-last: check-deps
 
 reserve:
 	@mkdir -p $(SAVE_DIR)
-	oarsub -l $(OAR_GPU),walltime=$(WALLTIME) -p "$(OAR_PROJECT)" \
+	$(OARSUB_BATCH) \
 		--stdout $(SAVE_DIR)/run.out --stderr $(SAVE_DIR)/run.err \
 		-O "$(OAR_JOB_NAME)" \
 		-- /bin/bash -c "$(OAR_RUN) train DATA_DIR=$(DATA_DIR) SAVE_DIR=$(SAVE_DIR)"
 
 reserve-fresh:
 	@mkdir -p $(SAVE_DIR)
-	oarsub -l $(OAR_GPU),walltime=$(WALLTIME) -p "$(OAR_PROJECT)" \
+	$(OARSUB_BATCH) \
 		--stdout $(SAVE_DIR)/run.out --stderr $(SAVE_DIR)/run.err \
 		-O "$(OAR_JOB_NAME)_fresh" \
 		-- /bin/bash -c "$(OAR_RUN) train-fresh DATA_DIR=$(DATA_DIR) SAVE_DIR=$(SAVE_DIR)"
 
 reserve-resume:
 	@mkdir -p $(SAVE_DIR)
-	oarsub -l $(OAR_GPU),walltime=$(WALLTIME) -p "$(OAR_PROJECT)" \
+	$(OARSUB_BATCH) \
 		--stdout $(SAVE_DIR)/run.out --stderr $(SAVE_DIR)/run.err \
 		-O "$(OAR_JOB_NAME)_resume" \
 		-- /bin/bash -c "$(OAR_RUN) train-resume DATA_DIR=$(DATA_DIR) SAVE_DIR=$(SAVE_DIR)"

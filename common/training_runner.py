@@ -80,7 +80,7 @@ def run_training(
     if resume_path is not None:
         print(f"Reprise depuis checkpoint: {resume_path}")
         logger.info("Reprise depuis checkpoint: %s", resume_path)
-        checkpoint = load_checkpoint(resume_path, map_location=device)
+        checkpoint = load_checkpoint(resume_path, map_location="cpu")
         if mismatch_keys:
             warn_checkpoint_mismatch(checkpoint, args, mismatch_keys)
         start_epoch, best_val_acc, best_epoch, mlflow_run_id = restore_training_state(
