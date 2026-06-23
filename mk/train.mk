@@ -65,25 +65,16 @@ train-from-last: check-deps
 	$(TRAIN_CMD) --resume-path $(SAVE_DIR)/last.pt
 
 reserve:
-	@mkdir -p $(SAVE_DIR)
-	$(OARSUB_BATCH) \
-		--stdout $(SAVE_DIR)/run.out --stderr $(SAVE_DIR)/run.err \
-		-O "$(OAR_JOB_NAME)" \
-		-- /bin/bash -c "$(OAR_RUN) train DATA_DIR=$(DATA_DIR) SAVE_DIR=$(SAVE_DIR)"
+	$(call write_oar_job_script,train)
+	$(call oarsub_batch_job,train,$(OAR_JOB_NAME))
 
 reserve-fresh:
-	@mkdir -p $(SAVE_DIR)
-	$(OARSUB_BATCH) \
-		--stdout $(SAVE_DIR)/run.out --stderr $(SAVE_DIR)/run.err \
-		-O "$(OAR_JOB_NAME)_fresh" \
-		-- /bin/bash -c "$(OAR_RUN) train-fresh DATA_DIR=$(DATA_DIR) SAVE_DIR=$(SAVE_DIR)"
+	$(call write_oar_job_script,train-fresh)
+	$(call oarsub_batch_job,train-fresh,$(OAR_JOB_NAME)_fresh)
 
 reserve-resume:
-	@mkdir -p $(SAVE_DIR)
-	$(OARSUB_BATCH) \
-		--stdout $(SAVE_DIR)/run.out --stderr $(SAVE_DIR)/run.err \
-		-O "$(OAR_JOB_NAME)_resume" \
-		-- /bin/bash -c "$(OAR_RUN) train-resume DATA_DIR=$(DATA_DIR) SAVE_DIR=$(SAVE_DIR)"
+	$(call write_oar_job_script,train-resume)
+	$(call oarsub_batch_job,train-resume,$(OAR_JOB_NAME)_resume)
 
 logs:
 	@tail -f $(SAVE_DIR)/train.log

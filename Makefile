@@ -123,14 +123,14 @@ print-python:
 define PROJECT_RULES
 train-$(1):
 	$$(MAKE) -C $(1) train DATA_DIR=$$(DATA_DIR) WALLTIME=$$(WALLTIME) \
-		OAR_PROJECT=$$(OAR_PROJECT) OAR_GPU=$$(OAR_GPU)
+		OAR_GPU=$$(OAR_GPU)
 
 train-fresh-$(1):
 	$$(MAKE) -C $(1) train-fresh DATA_DIR=$$(DATA_DIR)
 
 reserve-$(1):
 	$$(MAKE) -C $(1) reserve DATA_DIR=$$(DATA_DIR) WALLTIME=$$(WALLTIME) \
-		OAR_PROJECT=$$(OAR_PROJECT) OAR_GPU=$$(OAR_GPU)
+		OAR_GPU=$$(OAR_GPU)
 endef
 
 $(foreach p,$(PROJECTS),$(eval $(call PROJECT_RULES,$(p))))

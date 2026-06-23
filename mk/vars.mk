@@ -2,6 +2,7 @@
 
 include $(dir $(lastword $(MAKEFILE_LIST)))python.mk
 include $(dir $(lastword $(MAKEFILE_LIST)))grid5000.mk
+include $(dir $(lastword $(MAKEFILE_LIST)))oar_script.mk
 
 PROJECT ?=
 SNN_ROOT := $(abspath $(CURDIR)/..)
@@ -21,5 +22,3 @@ OAR_JOB_NAME ?= $(PROJECT)_train
 PROJECT_DIR := $(abspath $(CURDIR))
 TRAIN_ARGS := --config $(CONFIG) --save-dir $(SAVE_DIR) --data-dir $(DATA_DIR)
 TRAIN_CMD := $(PYTHON) -m scripts.train $(TRAIN_ARGS)
-
-OAR_RUN := bash -lc '$(G5K_MODULE_LOAD) cd $(PROJECT_DIR) && $(MAKE) --no-print-directory'
