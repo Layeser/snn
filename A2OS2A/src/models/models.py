@@ -111,7 +111,9 @@ class A2OS2ATransformer(nn.Module):
         return s
 
     def forward(self, x):
-        if x.dim() == 4:
+        if x.dim() == 5:
+            x = x.permute(1, 0, 2, 3, 4)
+        elif x.dim() == 4:
             x = x.unsqueeze(0).repeat(self.T, 1, 1, 1, 1)
         s = self.forward_features(x)
         return self.head(s)

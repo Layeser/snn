@@ -6,7 +6,8 @@
 #   make reserve-hpstattn WALLTIME=4:00:00
 #   make job-status
 
-DATA_DIR ?= $(HOME)/internship/snn/data
+DATA_DIR ?= $(SNN_ROOT)/data
+DATASET ?= cifar10
 
 SNN_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 include $(SNN_ROOT)/mk/grid5000.mk
@@ -22,6 +23,7 @@ include $(SNN_ROOT)/mk/python.mk
 BOOTSTRAP_PYTHON ?= $(DETECTED_PYTHON)
 
 .PHONY: help job-status setup setup-venv setup-g5k list-python-modules check-deps print-python interactive \
+	download-data download-cifar10 download-cifar10-dvs \
 	$(RESERVE_TARGETS) $(TRAIN_TARGETS) $(FRESH_TARGETS) reserve-all train-all
 
 help:
@@ -29,6 +31,9 @@ help:
 	@echo ""
 	@echo "Environnement:"
 	@echo "  make setup              Crée .venv (Python 3.10+, auto-détecté sur Grid5000)"
+	@echo "  make download-data      Télécharge CIFAR-10 + CIFAR-10-DVS (miroirs rapides)"
+	@echo "  make download-cifar10   Télécharge uniquement CIFAR-10"
+	@echo "  make download-cifar10-dvs  Télécharge les archives CIFAR-10-DVS (parallèle)"
 	@echo "  make setup-g5k          Idem (charge module $(G5K_PYTHON_MODULE) explicitement)"
 	@echo "  make list-python-modules  Liste les modules python dispo (module avail)"
 	@echo "  make check-deps         Vérifie Python 3.10+ et torch"
@@ -54,7 +59,8 @@ help:
 	@echo "     tail -f spikformer/save/run.out"
 	@echo ""
 	@echo "Entraînement (sur nœud GPU ou machine locale — pas depuis la frontale CPU):"
-	@echo "  make train-spikformer"
+	@echo "  make train-spikformer DATASET=cifar10-dvs"
+	@echo "  make train-spikformer DATA_DIR=$(DATA_DIR) DATASET=$(DATASET)"
 	@echo "  make train-spikdrivenformer"
 	@echo "  make train-spatialtemporal"
 	@echo "  make train-a2os2a"
@@ -77,7 +83,7 @@ help:
 	@echo "  cd spikformer && make logs"
 	@echo ""
 	@echo "Variables globales:"
-	@echo "  DATA_DIR=$(DATA_DIR)"
+	@echo "  DATA_DIR=$(DATA_DIR)  DATASET=$(DATASET)"
 	@echo "  WALLTIME=$(WALLTIME)  INTERACTIVE_WALLTIME=$(INTERACTIVE_WALLTIME)"
 	@echo "  OAR_GPU=$(OAR_GPU)  OAR_QUEUE=$(OAR_QUEUE)"
 	@echo ""
@@ -93,6 +99,17 @@ interactive:
 	$(OARSUB_INTERACTIVE)
 
 setup: setup-venv
+
+DOWNLOAD_PYTHON := $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,$(BOOTSTRAP_PYTHON))
+
+download-data:
+	$(DOWNLOAD_PYTHON) $(SNN_ROOT)/scripts/download_data.py all --data-dir $(DATA_DIR)
+
+download-cifar10:
+	$(DOWNLOAD_PYTHON) $(SNN_ROOT)/scripts/download_data.py cifar10 --data-dir $(DATA_DIR)
+
+download-cifar10-dvs:
+	$(DOWNLOAD_PYTHON) $(SNN_ROOT)/scripts/download_data.py cifar10-dvs --data-dir $(DATA_DIR) --workers 4
 
 setup-g5k:
 	@$(MAKE) setup BOOTSTRAP_PYTHON=$$(bash -lc 'module load $(G5K_PYTHON_MODULE) && command -v python3')
@@ -122,14 +139,14 @@ print-python:
 
 define PROJECT_RULES
 train-$(1):
-	$$(MAKE) -C $(1) train DATA_DIR=$$(DATA_DIR) WALLTIME=$$(WALLTIME) \
+	$$(MAKE) -C $(1) train DATA_DIR=$$(DATA_DIR) DATASET=$$(DATASET) WALLTIME=$$(WALLTIME) \
 		OAR_GPU=$$(OAR_GPU)
 
 train-fresh-$(1):
-	$$(MAKE) -C $(1) train-fresh DATA_DIR=$$(DATA_DIR)
+	$$(MAKE) -C $(1) train-fresh DATA_DIR=$$(DATA_DIR) DATASET=$$(DATASET)
 
 reserve-$(1):
-	$$(MAKE) -C $(1) reserve DATA_DIR=$$(DATA_DIR) WALLTIME=$$(WALLTIME) \
+	$$(MAKE) -C $(1) reserve DATA_DIR=$$(DATA_DIR) DATASET=$$(DATASET) WALLTIME=$$(WALLTIME) \
 		OAR_GPU=$$(OAR_GPU)
 endef
 

@@ -138,6 +138,8 @@ class HPSTAttenTransformer(nn.Module):
         return x.flatten(3).mean(3)
 
     def forward(self, x):
-        if x.dim() == 4:
+        if x.dim() == 5:
+            x = x.permute(1, 0, 2, 3, 4)
+        elif x.dim() == 4:
             x = x.unsqueeze(0).repeat(self.T, 1, 1, 1, 1)
         return self.head(self.forward_features(x))

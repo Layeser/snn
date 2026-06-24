@@ -20,6 +20,7 @@ label_smoothing: 0.1
 scheduler: cosine
 warmup_epochs: 20
 min_lr: 1.0e-5
-data_dir: /home/layesekou/masterds/internship/data
+dataset: cifar10
+data_dir: /home/layesekou/masterds/internship/snn/data
 save_dir: /home/layesekou/masterds/internship/snn/spatialtemporal/save
 device: cuda

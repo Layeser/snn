@@ -4,9 +4,16 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT.parent / "common"))
 
-from cifar10 import CIFAR10_MEAN, CIFAR10_STD, get_cifar10_loaders as _get_cifar10_loaders
+from cifar10 import CIFAR10_MEAN, CIFAR10_STD
+from datasets import get_dataset_loaders, get_dataset_profile
 
-__all__ = ["CIFAR10_MEAN", "CIFAR10_STD", "get_cifar10_loaders"]
+__all__ = [
+    "CIFAR10_MEAN",
+    "CIFAR10_STD",
+    "get_cifar10_loaders",
+    "get_dataset_loaders",
+    "get_dataset_profile",
+]
 
 
 def get_cifar10_loaders(
@@ -18,7 +25,8 @@ def get_cifar10_loaders(
     rand_augment=True,
     random_erasing=0.25,
 ):
-    return _get_cifar10_loaders(
+    return get_dataset_loaders(
+        dataset="cifar10",
         data_dir=data_dir,
         batch_size=batch_size,
         num_workers=num_workers,

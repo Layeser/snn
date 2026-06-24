@@ -7,6 +7,7 @@ from utils.config import Schema
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2].parent / "common"))
 from config_training import TRAINING_RECIPE_SCHEMA, validate_training_recipe
+from config_data import validate_dataset_config
 
 SPIKDRIVEN_CONFIG_SCHEMA: Schema = {
     "epochs": (int, "positive"),
@@ -21,6 +22,7 @@ SPIKDRIVEN_CONFIG_SCHEMA: Schema = {
     "pooling_stat": (str, None),
     "spike_mode": (str, None),
     "lif_backend": (str, None),
+    "dataset": (str, None),
     "data_dir": (str, None),
     "save_dir": (str, None),
     "device": (str, None),
@@ -29,6 +31,7 @@ SPIKDRIVEN_CONFIG_SCHEMA: Schema = {
 
 
 def validate_spikdriven_config(config: dict[str, Any]) -> None:
+    validate_dataset_config(config)
     if config["emb_dim"] % config["num_heads"] != 0:
         raise ValueError(
             f"emb_dim ({config['emb_dim']}) doit être divisible par num_heads ({config['num_heads']})"

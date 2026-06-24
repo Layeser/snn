@@ -7,7 +7,7 @@ define write_oar_job_script
 		'set -euo pipefail' \
 		'$(G5K_MODULE_LOAD)' \
 		'cd "$(PROJECT_DIR)"' \
-		'exec $(MAKE) $(1) DATA_DIR="$(DATA_DIR)" SAVE_DIR="$(SAVE_DIR)"' \
+		'exec $(MAKE) $(1) DATA_DIR="$(DATA_DIR)" DATASET="$(DATASET)" SAVE_DIR="$(SAVE_DIR)"' \
 		> "$(SAVE_DIR)/run_job.sh"
 	@chmod +x "$(SAVE_DIR)/run_job.sh"
 endef

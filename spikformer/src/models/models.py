@@ -140,8 +140,10 @@ class Spikformer(nn.Module):
 
     def forward(self, x):
         # Appeler functional.reset_net(self) avant chaque batch en entraînement.
-        x = x.unsqueeze(0)                   # (1, B, C_in, H, W)
-        x = x.repeat(self.T, 1, 1, 1, 1)     # (T, B, C_in, H, W)
+        if x.dim() == 5:
+            x = x.permute(1, 0, 2, 3, 4)
+        else:
+            x = x.unsqueeze(0).repeat(self.T, 1, 1, 1, 1)
         x = self.forward_features(x)         # (T, B, D)
         x = x.mean(0)                        # (B, D)  mean sur dim temps T
         x = self.head(x)                     # (B, num_classes)

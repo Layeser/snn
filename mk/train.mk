@@ -24,7 +24,7 @@ help:
 	@echo "  make check-deps         Vérifie torch pour PYTHON courant"
 	@echo "  make print-python       Affiche l'interpréteur sélectionné"
 	@echo ""
-	@echo "Variables: DATA_DIR=$(DATA_DIR)"
+	@echo "Variables: DATA_DIR=$(DATA_DIR)  DATASET=$(DATASET)"
 	@echo "           SAVE_DIR=$(SAVE_DIR)"
 	@echo "           PYTHON=$(PYTHON)"
 	@echo "           WALLTIME=$(WALLTIME)  OAR_GPU=$(OAR_GPU)"

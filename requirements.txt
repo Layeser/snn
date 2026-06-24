@@ -4,4 +4,7 @@ spikingjelly
 tqdm
 pyyaml
 mlflow
-# Optionnel (GPU, accélère les LIF) : cupy-cuda12x
+tensorboard
+# Optionnel (GPU, accélère les LIF) : cupy-cuda12x ou cupy-cuda13x selon CUDA
+cupy-cuda12x
+tensorboard

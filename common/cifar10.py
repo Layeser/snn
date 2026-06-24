@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from data_download import ensure_cifar10
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
@@ -23,11 +24,13 @@ def _resolve_data_dir(data_dir=None, project_root: Path | None = None) -> Path:
     if project_root is None:
         project_root = Path.cwd()
 
-    shared = project_root.parent.parent / "data"
+    repo_data = project_root.parent / "data"
     local = project_root / "data"
-    if (shared / "cifar-10-batches-py").exists():
-        return shared
-    return local
+    if repo_data.exists():
+        return repo_data
+    if local.exists():
+        return local
+    return repo_data
 
 
 def build_cifar10_transforms(
@@ -74,14 +77,17 @@ def get_cifar10_loaders(
     data_dir = _resolve_data_dir(data_dir, project_root)
     data_dir.mkdir(parents=True, exist_ok=True)
 
+    if download:
+        ensure_cifar10(data_dir)
+
     train_tf, val_tf = build_cifar10_transforms(
         augment_train=augment_train,
         rand_augment=rand_augment,
         random_erasing=random_erasing,
     )
 
-    train_set = datasets.CIFAR10(root=str(data_dir), train=True, download=download, transform=train_tf)
-    val_set = datasets.CIFAR10(root=str(data_dir), train=False, download=download, transform=val_tf)
+    train_set = datasets.CIFAR10(root=str(data_dir), train=True, download=False, transform=train_tf)
+    val_set = datasets.CIFAR10(root=str(data_dir), train=False, download=False, transform=val_tf)
 
     train_loader = DataLoader(
         train_set,

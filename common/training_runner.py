@@ -113,6 +113,8 @@ def run_training(
 
     resume_tag = "true" if resume_path is not None else "false"
     tags = {"resumed": resume_tag}
+    if "dataset" in hyperparams:
+        tags["dataset"] = str(hyperparams["dataset"])
 
     latest_state_holder: dict[str, Any] = {"state": None}
 

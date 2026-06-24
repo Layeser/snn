@@ -16,17 +16,23 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = ROOT / "config" / "train.yml"
-MLFLOW_EXPERIMENT = "A2OS2A-CIFAR10"
+MLFLOW_PROJECT_PREFIX = "A2OS2A"
 
 sys.path.insert(0, str(ROOT.parent / "common"))
 sys.path.insert(0, str(ROOT / "src" / "models"))
 sys.path.insert(0, str(ROOT / "src"))
 
-from loaders.cifar import get_cifar10_loaders
+from datasets import dataset_hyperparams, get_dataset_loaders, get_dataset_profile, mlflow_experiment_name
 from models import A2OS2ATransformer
 from modules.spike import resolve_lif_backend
 from train_cli import add_checkpoint_args
-from train_integration import build_criterion, build_scheduler, loader_kwargs_from_config, recipe_hyperparams
+from train_integration import (
+    apply_dataset_training_overrides,
+    build_criterion,
+    build_scheduler,
+    loader_kwargs_from_config,
+    recipe_hyperparams,
+)
 from training_runner import run_training
 from utils.config import parse_train_args
 from utils.config_schema import A2OS2A_CONFIG_SCHEMA, validate_a2os2a_config
@@ -47,6 +53,7 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
     p.add_argument("--T", type=int, default=config["T"])
     p.add_argument("--num-workers", type=int, default=config["num_workers"])
     p.add_argument("--lif-backend", type=str, default=config["lif_backend"])
+    p.add_argument("--dataset", type=str, default=config["dataset"], choices=["cifar10", "cifar10-dvs"])
     p.add_argument("--data-dir", type=str, default=config["data_dir"])
     p.add_argument("--save-dir", type=str, default=config["save_dir"])
     p.add_argument("--device", type=str, default=config["device"])
@@ -61,12 +68,16 @@ def main():
         build_parser,
         extra_validators=[validate_a2os2a_config],
     )
+    config = apply_dataset_training_overrides(config, args.dataset)
+    profile = get_dataset_profile(args.dataset)
     print(f"Config validée: {args.config}")
+    print(f"Dataset: {profile.display_name} ({profile.name})")
     device = resolve_device(args.device)
     save_dir = Path(args.save_dir)
 
     lif_backend = resolve_lif_backend(args.lif_backend)
     print(f"Device: {device}")
+    print(f"Data dir: {args.data_dir}")
     print(f"LIF backend: {lif_backend} (config lif_backend={args.lif_backend})")
     if lif_backend == "torch" and str(device) == "cuda":
         print(
@@ -78,19 +89,22 @@ def main():
         f"lr={args.lr}, embed_dim={args.embed_dim}, depth={args.depth}, T={args.T}"
     )
 
-    train_loader, val_loader = get_cifar10_loaders(
+    train_loader, val_loader = get_dataset_loaders(
+        dataset=args.dataset,
         data_dir=args.data_dir,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         download=True,
-        **loader_kwargs_from_config(config),
+        project_root=ROOT,
+        T=args.T,
+        **loader_kwargs_from_config(config, args.dataset),
     )
     print(f"Train batches: {len(train_loader)} | Val batches: {len(val_loader)}")
 
     model = A2OS2ATransformer(
-        img_size=32,
-        in_channels=3,
-        num_classes=10,
+        img_size=profile.img_size,
+        in_channels=profile.in_channels,
+        num_classes=profile.num_classes,
         embed_dim=args.embed_dim,
         depth=args.depth,
         num_heads=args.num_heads,
@@ -115,8 +129,9 @@ def main():
         config=config,
         args=args,
         save_dir=save_dir,
-        experiment_name=MLFLOW_EXPERIMENT,
+        experiment_name=mlflow_experiment_name(MLFLOW_PROJECT_PREFIX, args.dataset),
         hyperparams={
+            **dataset_hyperparams(args.dataset, args.data_dir),
             "epochs": args.epochs,
             "batch_size": args.batch_size,
             "learning_rate": args.lr,
@@ -132,7 +147,7 @@ def main():
         },
         train_one_epoch=train_one_epoch,
         validate=validate,
-        mismatch_keys=("embed_dim", "depth", "num_heads", "T", "batch_size"),
+        mismatch_keys=("dataset", "embed_dim", "depth", "num_heads", "T", "batch_size"),
         run_name_prefix="a2os2a",
     )
 

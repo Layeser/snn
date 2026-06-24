@@ -8,7 +8,8 @@ PROJECT ?=
 SNN_ROOT := $(abspath $(CURDIR)/..)
 VENV_PYTHON := $(SNN_ROOT)/.venv/bin/python
 CONFIG ?= config/train.yml
-DATA_DIR ?= $(HOME)/internship/snn/data
+DATA_DIR ?= $(SNN_ROOT)/data
+DATASET ?= cifar10
 SAVE_DIR ?= $(CURDIR)/save
 
 VENV_TORCH := $(call _python_has_torch,$(VENV_PYTHON))
@@ -20,5 +21,5 @@ PYTHON ?= $(_DEFAULT_PYTHON)
 OAR_JOB_NAME ?= $(PROJECT)_train
 
 PROJECT_DIR := $(abspath $(CURDIR))
-TRAIN_ARGS := --config $(CONFIG) --save-dir $(SAVE_DIR) --data-dir $(DATA_DIR)
+TRAIN_ARGS := --config $(CONFIG) --save-dir $(SAVE_DIR) --data-dir $(DATA_DIR) --dataset $(DATASET)
 TRAIN_CMD := $(PYTHON) -m scripts.train $(TRAIN_ARGS)

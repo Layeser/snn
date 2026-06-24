@@ -1,25 +1,17 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import torch
 from spikingjelly.clock_driven.neuron import MultiStepLIFNode, MultiStepParametricLIFNode
 
+_COMMON = Path(__file__).resolve().parents[3].parent / "common"
+if str(_COMMON) not in sys.path:
+    sys.path.insert(0, str(_COMMON))
+from spike_backend import resolve_lif_backend
+
 __all__ = ["resolve_lif_backend", "make_lif"]
-
-
-def resolve_lif_backend(backend: str = "auto") -> str:
-    if backend in ("torch", "cupy"):
-        return backend
-    if backend != "auto":
-        raise ValueError(f"lif_backend invalide: {backend!r} (attendu: auto, torch, cupy)")
-
-    if torch.cuda.is_available():
-        try:
-            import cupy  # noqa: F401
-
-            return "cupy"
-        except ImportError:
-            pass
-    return "torch"
 
 
 def make_lif(
