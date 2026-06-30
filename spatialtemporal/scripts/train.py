@@ -27,6 +27,10 @@ from modules.spike import resolve_lif_backend
 from train_cli import add_checkpoint_args
 from train_integration import (
     apply_dataset_training_overrides,
+    configure_cuda_runtime,
+    resolve_learning_rate,
+    resolve_num_workers,
+    resolve_training_batch_size,
     build_criterion,
     build_scheduler,
     loader_kwargs_from_config,
@@ -73,14 +77,20 @@ def main():
     )
     config = apply_dataset_training_overrides(config, args.dataset)
     profile = get_dataset_profile(args.dataset)
+    batch_size = resolve_training_batch_size(args.batch_size, config, profile)
+    learning_rate = resolve_learning_rate(args.lr, batch_size, config, profile)
     print(f"Config validée: {args.config}")
     print(f"Dataset: {profile.display_name} ({profile.name})")
     device = resolve_device(args.device)
+    config["use_amp"] = configure_cuda_runtime(device)
+    num_workers = resolve_num_workers(args.num_workers, profile)
     save_dir = Path(args.save_dir)
 
     lif_backend = resolve_lif_backend(args.lif_backend)
     print(f"Device: {device}")
     print(f"Data dir: {args.data_dir}")
+    print(f"AMP: {config['use_amp']}")
+    print(f"DataLoader workers: {num_workers}")
     print(f"LIF backend: {lif_backend} (config lif_backend={args.lif_backend})")
     if lif_backend == "torch" and str(device) == "cuda":
         print(
@@ -88,16 +98,16 @@ def main():
             "(pip install cupy-cuda12x selon ta version CUDA)"
         )
     print(
-        f"Hyperparamètres: epochs={args.epochs}, batch_size={args.batch_size}, "
-        f"lr={args.lr}, embed_dim={args.embed_dim}, depth={args.depth}, "
+        f"Hyperparamètres: epochs={args.epochs}, batch_size={batch_size}, "
+        f"lr={learning_rate}, embed_dim={args.embed_dim}, depth={args.depth}, "
         f"T={args.T}, chunk_size={args.chunk_size}, attention_mode={args.attention_mode}"
     )
 
     train_loader, val_loader = get_dataset_loaders(
         dataset=args.dataset,
         data_dir=args.data_dir,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
+        batch_size=batch_size,
+        num_workers=num_workers,
         download=True,
         project_root=ROOT,
         T=args.T,
@@ -123,7 +133,7 @@ def main():
 
     criterion = build_criterion(config)
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        model.parameters(), lr=learning_rate, weight_decay=args.weight_decay
     )
     scheduler = build_scheduler(optimizer, config, args.epochs)
 
@@ -142,8 +152,8 @@ def main():
         hyperparams={
             **dataset_hyperparams(args.dataset, args.data_dir),
             "epochs": args.epochs,
-            "batch_size": args.batch_size,
-            "learning_rate": args.lr,
+            "batch_size": batch_size,
+            "learning_rate": learning_rate,
             "weight_decay": args.weight_decay,
             "embed_dim": args.embed_dim,
             "depth": args.depth,
@@ -154,7 +164,7 @@ def main():
             "spike_mode": args.spike_mode,
             "lif_backend": lif_backend,
             "attention_mode": args.attention_mode,
-            "num_workers": args.num_workers,
+            "num_workers": num_workers,
             "device": str(device),
             **recipe_hyperparams(config),
         },
