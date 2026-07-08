@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import spikingjelly.datasets as sjds
 import torch
 from spikingjelly.datasets.cifar10_dvs import CIFAR10DVS
@@ -21,8 +22,16 @@ CIFAR10_DVS_NUM_CLASSES = 10
 CIFAR10_DVS_TRAIN_RATIO = 0.9
 
 
-def _split_cache_path(dvs_root: Path, train_ratio: float, frames_number: int) -> Path:
-    return dvs_root / f"split_train_{train_ratio}_frames_{frames_number}.pt"
+def _split_cache_path(
+    dvs_root: Path,
+    train_ratio: float,
+    frames_number: int,
+    *,
+    random_split: bool,
+    seed: int,
+) -> Path:
+    mode = "random" if random_split else "ordered"
+    return dvs_root / f"split_{mode}_seed_{seed}_train_{train_ratio}_frames_{frames_number}.pt"
 
 
 def _cached_train_val_split(
@@ -31,8 +40,17 @@ def _cached_train_val_split(
     train_ratio: float,
     frames_number: int,
     num_classes: int = CIFAR10_DVS_NUM_CLASSES,
+    *,
+    random_split: bool = True,
+    seed: int = 0,
 ):
-    cache_path = _split_cache_path(dvs_root, train_ratio, frames_number)
+    cache_path = _split_cache_path(
+        dvs_root,
+        train_ratio,
+        frames_number,
+        random_split=random_split,
+        seed=seed,
+    )
     if cache_path.is_file():
         indices = torch.load(cache_path, weights_only=True)
         return (
@@ -40,11 +58,13 @@ def _cached_train_val_split(
             Subset(origin_set, indices["val"]),
         )
 
+    if random_split:
+        np.random.seed(seed)
     train_set, val_set = sjds.split_to_train_test_set(
         train_ratio,
         origin_set,
         num_classes=num_classes,
-        random_split=False,
+        random_split=random_split,
     )
     torch.save(
         {"train": train_set.indices, "val": val_set.indices},

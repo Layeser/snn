@@ -19,6 +19,10 @@ class ClassificationHead(nn.Module):
         self.fc = nn.Linear(embed_dim, num_classes)
 
     def forward(self, x):
+        # x: (T, B, D)
         x = self.head_lif(x)
+        # x: (T, B, D)
         x = self.fc(x)
+        # x: (T, B, num_classes)
+        # temporal average -> (B, num_classes)
         return x.mean(0)

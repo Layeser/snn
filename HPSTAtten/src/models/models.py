@@ -43,7 +43,9 @@ class MS_Block_Conv(nn.Module):
         )
 
     def forward(self, x):
+        # x: (T, B, D, H, W)
         x = self.attn(x)
+        # x: (T, B, D, H, W)
         return self.mlp(x)
 
 
@@ -51,10 +53,17 @@ class HPSTAttenTransformer(nn.Module):
     """
     HP-STAtten Transformer — Proposition A.
 
-    Pipeline :
-      (B,3,H,W) → repeat T → SPS → depth×(HP-STAtten+MLP)
-      → GAP spatial mean(N) → (T,B,D)
-      → head_lif → Linear → mean(T) → (B, C)
+    Pipeline (shapes) :
+      - CIFAR-10       : (B, C, H, W)  with C=3, H=W=32
+      - CIFAR-10-DVS   : (B, T, C, H, W) with C=2, H=W=128
+
+      Forward:
+        (B, C, H, W)          -> expand to (T, B, C, H, W)
+        (B, T, C, H, W)       -> permute to (T, B, C, H, W)
+        SPS                   -> (T, B, D, H', W')
+        depth x (Attn + MLP)  -> (T, B, D, H', W')
+        GAP over spatial tokens N=H'*W' -> (T, B, D)
+        Head                  -> (B, num_classes)
 
     Config CIFAR : depth=2, D=256, T=4, chunk_size=2, pooling_stat=0011
   """
@@ -132,14 +141,20 @@ class HPSTAttenTransformer(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward_features(self, x):
+        # x: (T, B, C_in, H, W)
         x = self.patch_embed(x)
+        # x: (T, B, D, H', W')
         for blk in self.blocks:
             x = blk(x)
+        # x: (T, B, D, H', W') -> flatten spatial -> (T, B, D, N) -> mean N -> (T, B, D)
         return x.flatten(3).mean(3)
 
     def forward(self, x):
         if x.dim() == 5:
+            # DVS batch: (B, T, C, H, W) -> (T, B, C, H, W)
             x = x.permute(1, 0, 2, 3, 4)
         elif x.dim() == 4:
+            # Image batch: (B, C, H, W) -> (T, B, C, H, W) by repeating in time
             x = x.unsqueeze(0).repeat(self.T, 1, 1, 1, 1)
+        # features: (T, B, D) -> head -> (B, num_classes)
         return self.head(self.forward_features(x))
