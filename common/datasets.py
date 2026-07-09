@@ -81,6 +81,16 @@ def dataset_hyperparams(dataset: str, data_dir: str | Path) -> dict[str, Any]:
     }
 
 
+def dataset_split_params(train_loader, val_loader) -> dict[str, int]:
+    """Tailles train/val pour logging MLflow (échantillons et batches)."""
+    return {
+        "train_size": len(train_loader.dataset),
+        "val_size": len(val_loader.dataset),
+        "train_batches": len(train_loader),
+        "val_batches": len(val_loader),
+    }
+
+
 def loader_kwargs_for_dataset(config: dict[str, Any], profile: DatasetProfile) -> dict[str, Any]:
     if profile.name == "cifar10":
         return {
@@ -88,12 +98,15 @@ def loader_kwargs_for_dataset(config: dict[str, Any], profile: DatasetProfile) -
             "rand_augment": config["rand_augment"] == "true",
             "random_erasing": config["random_erasing"],
         }
+    if profile.name == "cifar10-dvs":
+        return {
+            "augment_train": config.get("dvs_augment", "true") == "true",
+            "random_split": config.get("dvs_random_split", "false") == "true",
+        }
     return {}
 
 
 def effective_mixup(config: dict[str, Any], profile: DatasetProfile) -> float:
-    if profile.temporal_input:
-        return 0.0
     return config["mixup"]
 
 
@@ -125,5 +138,6 @@ def get_dataset_loaders(
             download=download,
             project_root=project_root,
             frames_number=T,
+            **loader_kwargs,
         )
     raise ValueError(f"Dataset non supporté: {dataset!r}")

@@ -12,6 +12,8 @@ pooling_stat: "0011"
 spike_mode: lif
 lif_backend: auto
 hybrid_qkv: "true"
+dvs_augment: "true"
+dvs_random_split: "false"
 augment_train: "true"
 rand_augment: "true"
 random_erasing: 0.25

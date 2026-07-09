@@ -17,9 +17,32 @@ from torch.utils.data import DataLoader, Subset
 
 from cifar10 import _resolve_data_dir
 from cifar10_dvs_patch import apply_cifar10_dvs_numpy2_patch, prepare_cifar10_dvs_frames
+from dvs_augment import build_dvs_train_transform
 
 CIFAR10_DVS_NUM_CLASSES = 10
 CIFAR10_DVS_TRAIN_RATIO = 0.9
+
+
+class _AugmentedFrameDataset(torch.utils.data.Dataset):
+    """Applique une transform (augmentation DVS) à la volée sur les frames.
+
+    Chaque échantillon (T, C, H, W) est converti en tenseur float puis passé à
+    la transform. Utilisé uniquement pour le split train.
+    """
+
+    def __init__(self, base, transform):
+        self.base = base
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.base)
+
+    def __getitem__(self, idx):
+        frames, label = self.base[idx]
+        frames = torch.as_tensor(frames, dtype=torch.float32)
+        if self.transform is not None:
+            frames = self.transform(frames)
+        return frames, label
 
 
 def _split_cache_path(
@@ -88,6 +111,8 @@ def get_cifar10_dvs_loaders(
     project_root: Path | None = None,
     frames_number: int = 10,
     train_ratio: float = CIFAR10_DVS_TRAIN_RATIO,
+    augment_train: bool = True,
+    random_split: bool = False,
 ):
     apply_cifar10_dvs_numpy2_patch()
 
@@ -110,7 +135,16 @@ def get_cifar10_dvs_loaders(
         dvs_root,
         train_ratio,
         frames_number,
+        random_split=random_split,
     )
+    print(
+        f"Split DVS: {'random (seed=0)' if random_split else 'ordonné (comme Spikformer)'} "
+        f"— {int(train_ratio * 100)}/{int((1 - train_ratio) * 100)} stratifié par classe."
+    )
+
+    if augment_train:
+        train_set = _AugmentedFrameDataset(train_set, build_dvs_train_transform())
+        print("Augmentation DVS activée (flip + SNNAugmentWide) sur le train.")
 
     loader_kwargs = {
         "batch_size": batch_size,

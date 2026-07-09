@@ -21,7 +21,13 @@ sys.path.insert(0, str(ROOT.parent / "common"))
 sys.path.insert(0, str(ROOT / "src" / "models"))
 sys.path.insert(0, str(ROOT / "src"))
 
-from datasets import dataset_hyperparams, get_dataset_loaders, get_dataset_profile, mlflow_experiment_name
+from datasets import (
+    dataset_hyperparams,
+    dataset_split_params,
+    get_dataset_loaders,
+    get_dataset_profile,
+    mlflow_experiment_name,
+)
 from models import HPSTAttenTransformer
 from modules.spike import resolve_lif_backend
 from train_cli import add_checkpoint_args
@@ -153,6 +159,7 @@ def main():
         experiment_name=mlflow_experiment_name(MLFLOW_PROJECT_PREFIX, args.dataset),
         hyperparams={
             **dataset_hyperparams(args.dataset, args.data_dir),
+            **dataset_split_params(train_loader, val_loader),
             "epochs": args.epochs,
             "batch_size": batch_size,
             "learning_rate": learning_rate,
@@ -166,6 +173,8 @@ def main():
             "spike_mode": args.spike_mode,
             "lif_backend": lif_backend,
             "hybrid_qkv": hybrid_qkv,
+            "dvs_augment": config.get("dvs_augment", "true"),
+            "dvs_random_split": config.get("dvs_random_split", "false"),
             "num_workers": num_workers,
             "use_amp": config["use_amp"],
             "device": str(device),
