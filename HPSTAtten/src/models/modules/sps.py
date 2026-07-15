@@ -53,11 +53,15 @@ class SPS(nn.Module):
         self.rpe_bn = nn.BatchNorm2d(embed_dims)
 
     def forward(self, x):
+        # x: (T, B, C_in, H, W)
         T, B, _, H, W = x.shape
         ratio = 1
 
+        # Merge time+batch for 2D convs: (T*B, C_in, H, W)
         x = self.proj_conv(x.flatten(0, 1))
+        # Restore (T, B, C, H, W) for multi-step spiking neurons
         x = self.proj_bn(x).reshape(T, B, -1, H // ratio, W // ratio).contiguous()
+        # LIF expects (T, B, C, H, W) and returns same; then merge again to apply conv/pool
         x = self.proj_lif(x).flatten(0, 1)
         if self.pooling_stat[0] == "1":
             x = self.maxpool(x)
@@ -84,7 +88,9 @@ class SPS(nn.Module):
             ratio *= 2
 
         x_feat = x
+        # Back to (T, B, D, H', W') for spiking + positional enhancement
         x = self.proj_lif3(x.reshape(T, B, -1, H // ratio, W // ratio).contiguous()).flatten(0, 1)
         x = self.rpe_conv(x)
         x = self.rpe_bn(x)
+        # Output: (T, B, D, H', W')
         return (x + x_feat).reshape(T, B, -1, H // ratio, W // ratio).contiguous()

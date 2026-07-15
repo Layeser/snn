@@ -24,6 +24,8 @@ HPSTATTEN_CONFIG_SCHEMA: Schema = {
     "spike_mode": (str, None),
     "lif_backend": (str, None),
     "hybrid_qkv": (str, None),
+    "dvs_augment": (str, None),
+    "dvs_random_split": (str, None),
     "dataset": (str, None),
     "data_dir": (str, None),
     "save_dir": (str, None),
@@ -56,6 +58,14 @@ def validate_hpstattn_config(config: dict[str, Any]) -> None:
     if config["hybrid_qkv"] not in ("true", "false"):
         raise ValueError(
             f"hybrid_qkv doit être 'true' ou 'false' (reçu: {config['hybrid_qkv']!r})"
+        )
+    if config["dvs_augment"] not in ("true", "false"):
+        raise ValueError(
+            f"dvs_augment doit être 'true' ou 'false' (reçu: {config['dvs_augment']!r})"
+        )
+    if config["dvs_random_split"] not in ("true", "false"):
+        raise ValueError(
+            f"dvs_random_split doit être 'true' ou 'false' (reçu: {config['dvs_random_split']!r})"
         )
     if config["device"] is not None and config["device"] not in ("cuda", "cpu"):
         raise ValueError(f"'device' doit être 'cuda' ou 'cpu' (reçu: {config['device']!r})")

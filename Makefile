@@ -23,7 +23,7 @@ include $(SNN_ROOT)/mk/python.mk
 BOOTSTRAP_PYTHON ?= $(DETECTED_PYTHON)
 
 .PHONY: help job-status setup setup-venv setup-g5k list-python-modules check-deps print-python interactive \
-	download-data download-cifar10 download-cifar10-dvs \
+	download-data download-cifar10 download-cifar10-dvs prepare-cifar10-dvs \
 	$(RESERVE_TARGETS) $(TRAIN_TARGETS) $(FRESH_TARGETS) reserve-all train-all
 
 help:
@@ -34,6 +34,7 @@ help:
 	@echo "  make download-data      Télécharge CIFAR-10 + CIFAR-10-DVS (miroirs rapides)"
 	@echo "  make download-cifar10   Télécharge uniquement CIFAR-10"
 	@echo "  make download-cifar10-dvs  Télécharge les archives CIFAR-10-DVS (parallèle)"
+	@echo "  make prepare-cifar10-dvs   Convertit DVS en frames (~15–30 min, une fois)"
 	@echo "  make setup-g5k          Idem (charge module $(G5K_PYTHON_MODULE) explicitement)"
 	@echo "  make list-python-modules  Liste les modules python dispo (module avail)"
 	@echo "  make check-deps         Vérifie Python 3.10+ et torch"
@@ -59,7 +60,7 @@ help:
 	@echo "     tail -f spikformer/save/run.out"
 	@echo ""
 	@echo "Entraînement (sur nœud GPU ou machine locale — pas depuis la frontale CPU):"
-	@echo "  make train-spikformer DATASET=cifar10-dvs"
+	@echo "  make train-spikformer DATASET=cifar10-dvs
 	@echo "  make train-spikformer DATA_DIR=$(DATA_DIR) DATASET=$(DATASET)"
 	@echo "  make train-spikdrivenformer"
 	@echo "  make train-spatialtemporal"
@@ -110,6 +111,9 @@ download-cifar10:
 
 download-cifar10-dvs:
 	$(DOWNLOAD_PYTHON) $(SNN_ROOT)/scripts/download_data.py cifar10-dvs --data-dir $(DATA_DIR) --workers 4
+
+prepare-cifar10-dvs:
+	$(DOWNLOAD_PYTHON) $(SNN_ROOT)/scripts/download_data.py cifar10-dvs --data-dir $(DATA_DIR) --workers 4 --prepare-frames --frames 4
 
 setup-g5k:
 	@$(MAKE) setup BOOTSTRAP_PYTHON=$$(bash -lc 'module load $(G5K_PYTHON_MODULE) && command -v python3')

@@ -158,8 +158,15 @@ def run_training(
                 optimizer,
                 device,
                 mixup_alpha=config["mixup"],
+                use_amp=config.get("use_amp", False),
             )
-            val_loss, val_acc = validate(model, val_loader, criterion, device)
+            val_loss, val_acc = validate(
+                model,
+                val_loader,
+                criterion,
+                device,
+                use_amp=config.get("use_amp", False),
+            )
 
             if scheduler is not None:
                 scheduler.step()

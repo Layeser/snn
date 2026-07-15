@@ -82,13 +82,16 @@ class HPSTAtten(nn.Module):
         """Q/K/V avec encodage hybride (A²OS²A) ou binaire (ablation)."""
         N = H * W
         head_dim = C // self.num_heads
+        # x: (T, B, C, H, W) -> (T*B, C, H, W) for 2D convs
         x_for_qkv = x.flatten(0, 1)
 
         q = self.q_conv(x_for_qkv)
+        # (T*B, C, H, W) -> (T, B, C, H, W) for multi-step spiking neuron
         q = self.q_bn(q).reshape(T, B, C, H, W).contiguous()
         q = self.q_lif(q)
         if self.dvs:
             q = self.pool(q)
+        # Spatial tokens: (T, B, C, H, W) -> (T, B, heads, N, head_dim)
         q = (
             q.flatten(3).transpose(-1, -2)
             .reshape(T, B, N, self.num_heads, head_dim)
@@ -103,6 +106,7 @@ class HPSTAtten(nn.Module):
             k = self.k_lif(k)
         if self.dvs:
             k = self.pool(k)
+        # (T, B, C, H, W) -> (T, B, heads, N, head_dim)
         k = (
             k.flatten(3).transpose(-1, -2)
             .reshape(T, B, N, self.num_heads, head_dim)
@@ -117,6 +121,7 @@ class HPSTAtten(nn.Module):
             v = self.v_lif(v)
         if self.dvs:
             v = self.pool(v)
+        # (T, B, C, H, W) -> (T, B, heads, N, head_dim)
         v = (
             v.flatten(3).transpose(-1, -2)
             .reshape(T, B, N, self.num_heads, head_dim)
@@ -132,25 +137,37 @@ class HPSTAtten(nn.Module):
             scaling_factor = 1.0 / H
 
         num_chunks = T // self.chunk_size
+        # Group time into chunks:
+        # q: (T, B, heads, N, head_dim)
+        # -> (chunks, B, heads, cs, N, head_dim)
         q_chunks = q.view(num_chunks, self.chunk_size, B, self.num_heads, N, head_dim).permute(0, 2, 3, 1, 4, 5)
         k_chunks = k.view(num_chunks, self.chunk_size, B, self.num_heads, N, head_dim).permute(0, 2, 3, 1, 4, 5)
         v_chunks = v.view(num_chunks, self.chunk_size, B, self.num_heads, N, head_dim).permute(0, 2, 3, 1, 4, 5)
 
+        # Merge chunk time and spatial tokens: cs*N tokens per chunk
         q_chunks = q_chunks.reshape(num_chunks, B, self.num_heads, self.chunk_size * N, head_dim)
         k_chunks = k_chunks.reshape(num_chunks, B, self.num_heads, self.chunk_size * N, head_dim)
         v_chunks = v_chunks.reshape(num_chunks, B, self.num_heads, self.chunk_size * N, head_dim)
 
+        # Factorized attention (STAtten):
+        # A = K^T V -> (chunks, B, heads, head_dim, head_dim)
+        # out = Q A -> (chunks, B, heads, cs*N, head_dim)
         attn = torch.matmul(k_chunks.transpose(-2, -1), v_chunks) * scaling_factor
         out = torch.matmul(q_chunks, attn)
 
+        # Restore original layout:
+        # (chunks, B, heads, cs*N, head_dim) -> (T, B, heads, N, head_dim)
         out = out.reshape(num_chunks, B, self.num_heads, self.chunk_size, N, head_dim).permute(0, 3, 1, 2, 4, 5)
         output = out.reshape(T, B, self.num_heads, N, head_dim)
 
+        # heads + head_dim -> channels
+        # (T, B, heads, N, head_dim) -> (T, B, C, N) -> (T, B, C, H, W)
         x = output.transpose(3, 4).reshape(T, B, C, N).contiguous()
         x = self.out_lif(x).reshape(T, B, C, H, W).contiguous()
         return x
 
     def forward(self, x):
+        # x: (T, B, C, H, W)
         T, B, C, H, W = x.shape
         identity = x
 
@@ -161,8 +178,10 @@ class HPSTAtten(nn.Module):
         x = self._factorized_attention(q, k, v, T, B, C, H, W, N, head_dim)
 
         if self.dvs:
+            # DVS gating: keep sparse activity aligned with pooled shortcut
             x = x.mul(x_pool) + x_pool
 
+        # (T, B, C, H, W) -> (T*B, C, H, W) -> proj -> (T, B, C, H, W)
         x = self.proj_bn(self.proj_conv(x.flatten(0, 1))).reshape(T, B, C, H, W).contiguous()
         x = x + identity
         return x

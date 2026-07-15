@@ -18,6 +18,7 @@ from data_download import (
     is_cifar10_dvs_archives_ready,
     is_cifar10_ready,
 )
+from cifar10_dvs_patch import prepare_cifar10_dvs_frames
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,6 +42,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=4,
         help="Téléchargements parallèles pour CIFAR-10-DVS (défaut: 4)",
     )
+    p.add_argument(
+        "--frames",
+        type=int,
+        default=4,
+        help="Nombre de frames DVS à intégrer (doit correspondre à T du modèle, défaut: 4)",
+    )
+    p.add_argument(
+        "--prepare-frames",
+        action="store_true",
+        help="Convertir aussi les événements DVS en frames (long, ~15–30 min)",
+    )
     return p
 
 
@@ -57,6 +69,8 @@ def main() -> None:
         dvs_root = data_dir / "CIFAR10DVS"
         download_cifar10_dvs_archives(dvs_root, max_workers=args.workers)
         assert is_cifar10_dvs_archives_ready(dvs_root)
+        if args.prepare_frames:
+            prepare_cifar10_dvs_frames(dvs_root, frames_number=args.frames)
 
     print(f"\nTerminé. Données dans {data_dir}")
 
