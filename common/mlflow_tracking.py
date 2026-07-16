@@ -9,8 +9,41 @@ from typing import Iterator
 
 import mlflow
 
+_ARTIFACT_LOCATION: str | None = None
+
+
+def configure_tracking(
+    project_root: str | Path,
+    *,
+    db_name: str = "mlflow.db",
+    artifact_dirname: str = "mlruns",
+) -> Path:
+    """Fixe un store MLflow sqlite portable, versionnable via git.
+
+    - Métriques / params / tags -> ``<project_root>/<db_name>`` (petit, à committer).
+    - Artefacts (checkpoints, configs) -> ``<project_root>/<artifact_dirname>``
+      (lourd, gardé hors git).
+
+    Le chemin est résolu en absolu : le tracking pointe toujours vers le même
+    fichier quel que soit le dossier d'exécution (local, SSH, autre serveur).
+    """
+    global _ARTIFACT_LOCATION
+    root = Path(project_root).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    db_path = root / db_name
+    mlflow.set_tracking_uri(f"sqlite:///{db_path}")
+    artifact_dir = root / artifact_dirname
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    _ARTIFACT_LOCATION = artifact_dir.as_uri()
+    return db_path
+
 
 def setup_experiment(experiment_name: str) -> None:
+    if (
+        _ARTIFACT_LOCATION is not None
+        and mlflow.get_experiment_by_name(experiment_name) is None
+    ):
+        mlflow.create_experiment(experiment_name, artifact_location=_ARTIFACT_LOCATION)
     mlflow.set_experiment(experiment_name)
 
 

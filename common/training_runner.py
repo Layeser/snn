@@ -24,6 +24,7 @@ from checkpointing import (
     warn_checkpoint_mismatch,
 )
 from mlflow_tracking import (
+    configure_tracking,
     default_run_name,
     log_checkpoint_artifact,
     log_epoch_metrics,
@@ -56,7 +57,12 @@ def run_training(
     validate: ValidateFn,
     mismatch_keys: tuple[str, ...] = (),
     run_name_prefix: str = "train",
+    project_root: Path | str | None = None,
 ) -> tuple[float, int]:
+    if project_root is not None:
+        db_path = configure_tracking(project_root)
+        print(f"MLflow store: {db_path} (sqlite, versionné) | artefacts: mlruns/ (hors git)")
+
     paths = CheckpointPaths.from_dir(save_dir)
     logger = setup_train_logger(paths.save_dir)
 

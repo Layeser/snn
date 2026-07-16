@@ -179,6 +179,7 @@ def main():
         validate=validate,
         mismatch_keys=("dataset", "embed_dim", "depth", "num_heads", "T", "batch_size", "chunk_size"),
         run_name_prefix="stattn",
+        project_root=ROOT,
     )
 
 

@@ -166,6 +166,7 @@ def main():
         validate=validate,
         mismatch_keys=("dataset", "embed_dim", "depth", "num_heads", "T", "batch_size"),
         run_name_prefix="a2os2a",
+        project_root=ROOT,
     )
 
 

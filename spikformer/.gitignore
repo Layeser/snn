@@ -32,6 +32,7 @@ logs/
 wandb/
 mlruns/
 *.db
+!mlflow.db
 
 # Jupyter
 .ipynb_checkpoints/
@@ -54,3 +55,4 @@ Thumbs.db
 
 Notes/
 *.db
+!mlflow.db

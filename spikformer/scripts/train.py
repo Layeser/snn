@@ -165,6 +165,7 @@ def main():
         validate=validate,
         mismatch_keys=("dataset", "embed_dim", "depth", "num_heads", "T", "batch_size"),
         run_name_prefix="spikformer",
+        project_root=ROOT,
     )
 
 
