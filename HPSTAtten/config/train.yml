@@ -1,6 +1,11 @@
 epochs: 200
+<<<<<<< HEAD
 batch_size: 64
 learning_rate: 0.0003
+=======
+batch_size: 32
+learning_rate: 1e-6
+>>>>>>> 8a952f6 (change hyperparameter)
 weight_decay: 0.06
 emb_dim: 256
 depth: 2
@@ -21,7 +26,7 @@ mixup: 0.5
 label_smoothing: 0.1
 scheduler: none # cosine or none
 warmup_epochs: 20
-min_lr: 1.0e-5
+min_lr: 1e-7
 dataset: cifar10
 data_dir: /home/layesekou/masterds/internship/snn/data
 save_dir: /home/layesekou/masterds/internship/snn/HPSTAtten/save
