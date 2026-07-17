@@ -36,6 +36,7 @@ from train_integration import (
     configure_cuda_runtime,
     resolve_learning_rate,
     resolve_num_workers,
+    resolve_project_path,
     resolve_training_batch_size,
     build_criterion,
     build_scheduler,
@@ -88,6 +89,8 @@ def main():
         extra_validators=[validate_hpstattn_config],
     )
     config = apply_dataset_training_overrides(config, args.dataset)
+    args.data_dir = resolve_project_path(args.data_dir, ROOT)
+    args.save_dir = resolve_project_path(args.save_dir, ROOT)
     profile = get_dataset_profile(args.dataset)
     batch_size = resolve_training_batch_size(args.batch_size, config, profile)
     learning_rate = resolve_learning_rate(args.lr, batch_size, config, profile)

@@ -24,6 +24,8 @@ scheduler: "none"
 warmup_epochs: 20
 min_lr: 1.0e-7
 dataset: cifar10-dvs
-data_dir: /home/kasekou/internship/snn/data
-save_dir: /home/kasekou/internship/snn/HPSTAtten/save
+# Chemins portables : relatifs au dossier du projet HPSTAtten (résolus au runtime).
+# Un chemin absolu (ex: passé par le Makefile) reste prioritaire.
+data_dir: ../data
+save_dir: save
 device: cuda

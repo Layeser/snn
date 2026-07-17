@@ -10,6 +10,23 @@ from datasets import effective_mixup, get_dataset_profile, loader_kwargs_for_dat
 from training_recipe import build_cosine_scheduler
 
 
+def resolve_project_path(path: str | None, project_root: Any) -> str | None:
+    """Rend un chemin portable inter-machines.
+
+    - chemin absolu (ex: passé par le Makefile) -> conservé tel quel ;
+    - chemin relatif (ex: config ``../data``) -> résolu contre la racine projet.
+    Évite les chemins en dur type ``/home/<user>/...`` à changer par machine.
+    """
+    from pathlib import Path
+
+    if path is None:
+        return None
+    p = Path(path)
+    if p.is_absolute():
+        return str(p)
+    return str((Path(project_root) / p).resolve())
+
+
 def loader_kwargs_from_config(config: dict[str, Any], dataset: str | None = None) -> dict[str, Any]:
     profile = get_dataset_profile(dataset or config["dataset"])
     return loader_kwargs_for_dataset(config, profile)

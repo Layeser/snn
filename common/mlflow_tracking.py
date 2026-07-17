@@ -67,6 +67,65 @@ def _migrate_stale_artifact_locations(db_path: Path, artifact_root: Path) -> int
     return updated
 
 
+def _rewrite_artifact_path(
+    original: str | None, artifact_dir: Path, artifact_dirname: str
+) -> str | None:
+    """Réécrit un chemin d'artefact d'une autre machine vers le mlruns local.
+
+    Gère les chemins bruts (``/home/x/.../mlruns/...``) et les URI
+    (``file:///home/x/.../mlruns/...``). Retourne None si rien à changer.
+    """
+    if not original:
+        return None
+    local_plain = str(artifact_dir)
+    local_uri = artifact_dir.as_uri()
+    if original.startswith(local_plain) or original.startswith(local_uri):
+        return None
+    marker = f"/{artifact_dirname}"
+    idx = original.find(marker)
+    if idx == -1:
+        return None
+    tail = original[idx + len(marker):]  # ex: "/2/<run>/artifacts" ou ""
+    base = local_uri if original.startswith("file:") else local_plain
+    return base + tail
+
+
+def _migrate_artifact_paths(
+    db_path: Path, artifact_dir: Path, artifact_dirname: str
+) -> int:
+    """Rend le store MLflow portable : réécrit tous les chemins d'artefact
+    (expériences + runs) vers le dossier ``mlruns`` local de la machine.
+
+    Idempotent et silencieux en cas d'échec (ex: schéma inattendu).
+    """
+    if not db_path.exists():
+        return 0
+    changed = 0
+    try:
+        con = sqlite3.connect(str(db_path))
+        cur = con.cursor()
+        for table, id_col, path_col in (
+            ("experiments", "experiment_id", "artifact_location"),
+            ("runs", "run_uuid", "artifact_uri"),
+        ):
+            try:
+                rows = cur.execute(f"SELECT {id_col}, {path_col} FROM {table}").fetchall()
+            except sqlite3.OperationalError:
+                continue
+            for rid, path in rows:
+                new = _rewrite_artifact_path(path, artifact_dir, artifact_dirname)
+                if new is not None and new != path:
+                    cur.execute(
+                        f"UPDATE {table} SET {path_col}=? WHERE {id_col}=?", (new, rid)
+                    )
+                    changed += 1
+        con.commit()
+        con.close()
+    except sqlite3.Error:
+        return changed
+    return changed
+
+
 def configure_tracking(
     project_root: str | Path,
     *,
@@ -98,6 +157,15 @@ def configure_tracking(
     mlflow.set_tracking_uri(f"sqlite:///{db_path}")
     _ARTIFACT_ROOT = artifact_dir
     _ARTIFACT_LOCATION = artifact_dir.as_uri()
+    # Portabilité inter-machines : réécrit les chemins d'artefact gravés par une
+    # autre machine (ex: /home/kasekou/...) vers le mlruns local. Sans ça, MLflow
+    # tente d'écrire dans un chemin inexistant -> PermissionError.
+    migrated = _migrate_artifact_paths(db_path, artifact_dir, artifact_dirname)
+    if migrated:
+        print(
+            f"MLflow: {migrated} chemin(s) d'artefact réécrit(s) vers {artifact_dir} "
+            f"(portabilité inter-machines)"
+        )
     return db_path
 
 

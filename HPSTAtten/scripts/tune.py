@@ -56,6 +56,7 @@ from train_integration import (
     loader_kwargs_from_config,
     recipe_hyperparams,
     resolve_num_workers,
+    resolve_project_path,
     resolve_training_batch_size,
 )
 from training_runner import run_training
@@ -121,7 +122,7 @@ def main() -> None:
     )
 
     dataset = tune_args.dataset or base_config["dataset"]
-    data_dir = tune_args.data_dir or base_config["data_dir"]
+    data_dir = resolve_project_path(tune_args.data_dir or base_config["data_dir"], ROOT)
     profile = get_dataset_profile(dataset)
     device = resolve_device(tune_args.device or base_config["device"])
     use_amp = configure_cuda_runtime(device)
@@ -157,7 +158,7 @@ def main() -> None:
         seed=tune_args.seed,
         use_pruner=not tune_args.no_pruning,
     )
-    base_save_dir = Path(tune_args.save_dir or (ROOT / "save" / "optuna"))
+    base_save_dir = Path(resolve_project_path(tune_args.save_dir or "save/optuna", ROOT))
     experiment_name = mlflow_experiment_name(MLFLOW_PROJECT_PREFIX, dataset)
 
     print(f"Étude Optuna: {study_name}")
