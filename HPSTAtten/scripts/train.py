@@ -66,6 +66,12 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
     p.add_argument("--spike-mode", type=str, default=config["spike_mode"])
     p.add_argument("--lif-backend", type=str, default=config["lif_backend"])
     p.add_argument("--hybrid-qkv", type=str, default=config["hybrid_qkv"])
+    p.add_argument(
+        "--attention-mode",
+        type=str,
+        default=config["attention_mode"],
+        choices=["factorized", "sdt"],
+    )
     p.add_argument("--dataset", type=str, default=config["dataset"], choices=["cifar10", "cifar10-dvs"])
     p.add_argument("--data-dir", type=str, default=config["data_dir"])
     p.add_argument("--save-dir", type=str, default=config["save_dir"])
@@ -108,7 +114,8 @@ def main():
     print(
         f"Hyperparamètres: epochs={args.epochs}, batch_size={batch_size}, "
         f"lr={learning_rate}, embed_dim={args.embed_dim}, depth={args.depth}, "
-        f"T={args.T}, chunk_size={args.chunk_size}, hybrid_qkv={hybrid_qkv}"
+        f"T={args.T}, chunk_size={args.chunk_size}, hybrid_qkv={hybrid_qkv}, "
+        f"attention_mode={args.attention_mode}"
     )
 
     train_loader, val_loader = get_dataset_loaders(
@@ -137,6 +144,7 @@ def main():
         hybrid_qkv=hybrid_qkv,
         dvs=profile.dvs,
         T=args.T,
+        attention_mode=args.attention_mode,
     ).to(device)
 
     criterion = build_criterion(config)
@@ -173,6 +181,7 @@ def main():
             "spike_mode": args.spike_mode,
             "lif_backend": lif_backend,
             "hybrid_qkv": hybrid_qkv,
+            "attention_mode": args.attention_mode,
             "dvs_augment": config.get("dvs_augment", "true"),
             "dvs_random_split": config.get("dvs_random_split", "false"),
             "num_workers": num_workers,
@@ -182,7 +191,7 @@ def main():
         },
         train_one_epoch=train_one_epoch,
         validate=validate,
-        mismatch_keys=("dataset", "embed_dim", "depth", "num_heads", "T", "batch_size", "chunk_size"),
+        mismatch_keys=("dataset", "embed_dim", "depth", "num_heads", "T", "batch_size", "chunk_size", "attention_mode"),
         run_name_prefix="hpstattn",
         project_root=ROOT,
     )

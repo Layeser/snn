@@ -58,6 +58,7 @@ def run_training(
     mismatch_keys: tuple[str, ...] = (),
     run_name_prefix: str = "train",
     project_root: Path | str | None = None,
+    epoch_callback: Callable[[int, dict[str, float]], None] | None = None,
 ) -> tuple[float, int]:
     if project_root is not None:
         db_path = configure_tracking(project_root)
@@ -228,6 +229,20 @@ def run_training(
                 log_checkpoint_artifact(paths.best, BEST_CHECKPOINT)
                 print(f"  → meilleur modèle sauvegardé ({val_acc:.2f}%) → {paths.best}")
                 logger.info("Nouveau best checkpoint: %.4f%% epoch %s", val_acc, epoch)
+
+            if epoch_callback is not None:
+                # Reporting intermédiaire (ex: pruning Optuna). Peut lever une
+                # exception (ex: optuna.TrialPruned) pour arrêter tôt l'essai.
+                epoch_callback(
+                    epoch,
+                    {
+                        "train_loss": train_loss,
+                        "train_acc": train_acc,
+                        "val_loss": val_loss,
+                        "val_acc": val_acc,
+                        "best_val_acc": best_val_acc,
+                    },
+                )
 
         log_final_metrics(best_val_acc, best_epoch)
         log_artifacts(args.config, paths.best)

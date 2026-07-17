@@ -24,6 +24,7 @@ HPSTATTEN_CONFIG_SCHEMA: Schema = {
     "spike_mode": (str, None),
     "lif_backend": (str, None),
     "hybrid_qkv": (str, None),
+    "attention_mode": (str, None),
     "dvs_augment": (str, None),
     "dvs_random_split": (str, None),
     "dataset": (str, None),
@@ -58,6 +59,10 @@ def validate_hpstattn_config(config: dict[str, Any]) -> None:
     if config["hybrid_qkv"] not in ("true", "false"):
         raise ValueError(
             f"hybrid_qkv doit être 'true' ou 'false' (reçu: {config['hybrid_qkv']!r})"
+        )
+    if config["attention_mode"] not in ("factorized", "sdt"):
+        raise ValueError(
+            f"attention_mode doit être 'factorized' ou 'sdt' (reçu: {config['attention_mode']!r})"
         )
     if config["dvs_augment"] not in ("true", "false"):
         raise ValueError(

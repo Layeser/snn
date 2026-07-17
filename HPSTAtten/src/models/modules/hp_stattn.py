@@ -40,9 +40,13 @@ class HPSTAtten(nn.Module):
         hybrid_qkv=True,
         dvs=False,
         layer=0,
+        attention_mode="factorized",
     ):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} must be divisible by num_heads {num_heads}"
+        assert attention_mode in ("factorized", "sdt"), (
+            f"attention_mode doit être 'factorized' ou 'sdt' (reçu: {attention_mode!r})"
+        )
 
         self.dim = dim
         self.num_heads = num_heads
@@ -50,6 +54,7 @@ class HPSTAtten(nn.Module):
         self.hybrid_qkv = hybrid_qkv
         self.dvs = dvs
         self.layer = layer
+        self.attention_mode = attention_mode
 
         if dvs:
             self.pool = DvsPooling()
@@ -74,6 +79,12 @@ class HPSTAtten(nn.Module):
         self.v_lif = lif()
 
         self.out_lif = lif()  # SN(Q @ A) — A²OS²A
+
+        # Spike-Driven Self-Attention (SDSA) : neurone entre le produit K⊙V
+        # sommé sur les tokens et le produit de Hadamard avec Q. Créé uniquement
+        # en mode "sdt" pour préserver la compatibilité des checkpoints existants.
+        if attention_mode == "sdt":
+            self.talking_heads_lif = lif(v_threshold=0.5)
 
         self.proj_conv = nn.Conv2d(dim, dim, kernel_size=1)
         self.proj_bn = nn.BatchNorm2d(dim)
@@ -166,6 +177,23 @@ class HPSTAtten(nn.Module):
         x = self.out_lif(x).reshape(T, B, C, H, W).contiguous()
         return x
 
+    def _sdt_attention(self, q, k, v, T, B, C, H, W, N, head_dim):
+        """Spike-Driven Self-Attention : produit de Hadamard, complexité O(N·D).
+
+        Contrairement à la factorisation STAtten (A = K^T V, matrice Dh×Dh),
+        SDSA calcule un vecteur de contexte par tête en sommant K⊙V sur les
+        tokens, puis le module par Q élément par élément.
+        q, k, v : (T, B, heads, N, head_dim)
+        """
+        kv = k.mul(v)                       # (T, B, heads, N, head_dim)
+        kv = kv.sum(dim=-2, keepdim=True)   # (T, B, heads, 1, head_dim)
+        kv = self.talking_heads_lif(kv)
+        x = q.mul(kv)                       # broadcast sur N -> (T, B, heads, N, head_dim)
+        # heads + head_dim -> channels : (T, B, C, N) -> (T, B, C, H, W)
+        x = x.transpose(3, 4).reshape(T, B, C, N).contiguous()
+        x = self.out_lif(x).reshape(T, B, C, H, W).contiguous()
+        return x
+
     def forward(self, x):
         # x: (T, B, C, H, W)
         T, B, C, H, W = x.shape
@@ -175,7 +203,10 @@ class HPSTAtten(nn.Module):
         x_pool = self.pool(x) if self.dvs else None
 
         q, k, v, N, head_dim = self._encode_qkv(x, T, B, C, H, W)
-        x = self._factorized_attention(q, k, v, T, B, C, H, W, N, head_dim)
+        if self.attention_mode == "sdt":
+            x = self._sdt_attention(q, k, v, T, B, C, H, W, N, head_dim)
+        else:
+            x = self._factorized_attention(q, k, v, T, B, C, H, W, N, head_dim)
 
         if self.dvs:
             # DVS gating: keep sparse activity aligned with pooled shortcut

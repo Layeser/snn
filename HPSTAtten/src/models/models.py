@@ -22,6 +22,7 @@ class MS_Block_Conv(nn.Module):
         hybrid_qkv=True,
         dvs=False,
         layer=0,
+        attention_mode="factorized",
     ):
         super().__init__()
         self.attn = HPSTAtten(
@@ -33,6 +34,7 @@ class MS_Block_Conv(nn.Module):
             hybrid_qkv=hybrid_qkv,
             dvs=dvs,
             layer=layer,
+            attention_mode=attention_mode,
         )
         self.mlp = MLP(
             in_features=dim,
@@ -85,6 +87,7 @@ class HPSTAttenTransformer(nn.Module):
         hybrid_qkv=True,
         dvs=False,
         T=4,
+        attention_mode="factorized",
     ):
         super().__init__()
         self.T = T
@@ -116,6 +119,7 @@ class HPSTAttenTransformer(nn.Module):
                     hybrid_qkv=hybrid_qkv,
                     dvs=dvs,
                     layer=i,
+                    attention_mode=attention_mode,
                 )
                 for i in range(depth)
             ]

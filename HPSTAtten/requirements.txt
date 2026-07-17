@@ -4,4 +4,5 @@ spikingjelly
 tqdm
 pyyaml
 mlflow
+optuna
 # Optionnel (GPU, accélère les LIF) : cupy-cuda12x
