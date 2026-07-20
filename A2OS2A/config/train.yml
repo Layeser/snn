@@ -17,6 +17,6 @@ scheduler: cosine
 warmup_epochs: 20
 min_lr: 1.0e-5
 dataset: cifar10
-data_dir: /home/layesekou/masterds/internship/snn/data
-save_dir: /home/layesekou/masterds/internship/snn/A2OS2A/save
+data_dir: /home/kasekou/internship/snn/data
+save_dir: /home/kasekou/internship/snn/A2OS2A/save
 device: cuda
