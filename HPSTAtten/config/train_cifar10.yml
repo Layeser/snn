@@ -1,5 +1,5 @@
-# Alias legacy → identique à train_cifar10.yml
-# Préférer : make train DATASET=cifar10  (choix auto de la config)
+# CIFAR-10 statique (images RGB 32×32, T=4 pas répétés)
+# Sélection auto : make train DATASET=cifar10  (ou défaut Makefile)
 
 epochs: 200
 batch_size: 32
@@ -23,9 +23,9 @@ tet_means: 1.0
 dvs_augment: "false"
 dvs_random_split: "false"
 augment_train: "true"
-rand_augment: "true"
-random_erasing: 0.25
-mixup: 0.5
+rand_augment: "false"
+random_erasing: 0.0 #0.25
+mixup: 0.0 #0.5
 label_smoothing: 0.1
 scheduler: cosine
 warmup_epochs: 20

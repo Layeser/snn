@@ -7,7 +7,13 @@ from typing import Any
 import torch.nn as nn
 
 from datasets import effective_mixup, get_dataset_profile, loader_kwargs_for_dataset
-from training_recipe import build_cosine_scheduler
+from training_recipe import (
+    build_cosine_annealing_scheduler,
+    build_cosine_scheduler,
+    build_plateau_scheduler,
+    build_step_scheduler,
+    step_scheduler,
+)
 
 
 def resolve_project_path(path: str | None, project_root: Any) -> str | None:
@@ -120,18 +126,41 @@ def build_scheduler(
     config: dict[str, Any],
     epochs: int,
 ):
-    if config["scheduler"] != "cosine":
+    scheduler_name = config["scheduler"]
+    if scheduler_name == "none":
         return None
-    return build_cosine_scheduler(
-        optimizer,
-        epochs=epochs,
-        warmup_epochs=config["warmup_epochs"],
-        min_lr=config["min_lr"],
-    )
+    if scheduler_name == "cosine":
+        return build_cosine_scheduler(
+            optimizer,
+            epochs=epochs,
+            warmup_epochs=config["warmup_epochs"],
+            min_lr=config["min_lr"],
+        )
+    if scheduler_name == "cosine_annealing":
+        return build_cosine_annealing_scheduler(
+            optimizer,
+            epochs=epochs,
+            min_lr=config["min_lr"],
+        )
+    if scheduler_name == "plateau":
+        return build_plateau_scheduler(
+            optimizer,
+            factor=config["scheduler_factor"],
+            patience=config["scheduler_patience"],
+            threshold=config["scheduler_threshold"],
+            min_lr=config["min_lr"],
+        )
+    if scheduler_name == "step":
+        return build_step_scheduler(
+            optimizer,
+            step_size=config["scheduler_step_size"],
+            gamma=config["scheduler_gamma"],
+        )
+    raise ValueError(f"scheduler inconnu: {scheduler_name!r}")
 
 
 def recipe_hyperparams(config: dict[str, Any]) -> dict[str, Any]:
-    return {
+    params = {
         "augment_train": config["augment_train"],
         "rand_augment": config["rand_augment"],
         "random_erasing": config["random_erasing"],
@@ -140,4 +169,16 @@ def recipe_hyperparams(config: dict[str, Any]) -> dict[str, Any]:
         "scheduler": config["scheduler"],
         "warmup_epochs": config["warmup_epochs"],
         "min_lr": config["min_lr"],
+        "tet_loss": config.get("tet_loss", "false"),
+        "tet_lamb": config.get("tet_lamb", 0.0),
+        "tet_means": config.get("tet_means", 1.0),
     }
+    for key in (
+        "scheduler_step_size",
+        "scheduler_gamma",
+        "scheduler_patience",
+        "scheduler_factor",
+        "scheduler_threshold",
+    ):
+        params[key] = config[key]
+    return params

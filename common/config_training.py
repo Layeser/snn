@@ -15,13 +15,17 @@ TRAINING_RECIPE_SCHEMA: dict[str, tuple[type, str | None]] = {
     "min_lr": (float, "non_negative"),
 }
 
+SCHEDULER_CHOICES = ("none", "cosine", "cosine_annealing", "plateau", "step")
+
 
 def validate_training_recipe(config: dict[str, Any]) -> None:
     for key in ("augment_train", "rand_augment"):
         if config[key] not in ("true", "false"):
             raise ValueError(f"{key} doit être 'true' ou 'false' (reçu: {config[key]!r})")
-    if config["scheduler"] not in ("none", "cosine"):
-        raise ValueError(f"scheduler doit être 'none' ou 'cosine' (reçu: {config['scheduler']!r})")
+    if config["scheduler"] not in SCHEDULER_CHOICES:
+        raise ValueError(
+            f"scheduler doit être l'un de {SCHEDULER_CHOICES} (reçu: {config['scheduler']!r})"
+        )
     if config["random_erasing"] > 1.0:
         raise ValueError(f"random_erasing doit être <= 1.0 (reçu: {config['random_erasing']})")
     if config["label_smoothing"] >= 1.0:

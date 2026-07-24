@@ -1,4 +1,4 @@
-.PHONY: help train train-fresh train-resume train-from-last reserve reserve-fresh reserve-resume logs metrics job-status smoke check-deps print-python
+.PHONY: help train train-fresh train-resume train-from-last reserve reserve-fresh reserve-resume logs metrics job-status smoke check-deps print-python config-help
 
 help:
 	@echo "Projet: $(PROJECT)"
@@ -23,9 +23,11 @@ help:
 	@echo "Environnement:"
 	@echo "  make check-deps         Vérifie torch pour PYTHON courant"
 	@echo "  make print-python       Affiche l'interpréteur sélectionné"
+	@echo "  make config-help        Config YAML selon DATASET (si défini par le projet)"
 	@echo ""
 	@echo "Variables: DATA_DIR=$(DATA_DIR)  DATASET=$(DATASET)"
 	@echo "           SAVE_DIR=$(SAVE_DIR)"
+	@echo "           CONFIG=$(CONFIG)"
 	@echo "           PYTHON=$(PYTHON)"
 	@echo "           WALLTIME=$(WALLTIME)  OAR_GPU=$(OAR_GPU)"
 

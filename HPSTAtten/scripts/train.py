@@ -14,7 +14,11 @@ from typing import Any
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG_PATH = ROOT / "config" / "train.yml"
+CONFIG_BY_DATASET = {
+    "cifar10": ROOT / "config" / "train_cifar10.yml",
+    "cifar10-dvs": ROOT / "config" / "train_cifar10-dvs.yml",
+}
+DEFAULT_CONFIG_PATH = CONFIG_BY_DATASET["cifar10"]
 MLFLOW_PROJECT_PREFIX = "HP-STAtten"
 
 sys.path.insert(0, str(ROOT.parent / "common"))
@@ -73,6 +77,18 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
         default=config["attention_mode"],
         choices=["factorized", "sdt"],
     )
+    p.add_argument(
+        "--membrane-block",
+        type=str,
+        default=config["membrane_block"],
+        choices=["true", "false"],
+    )
+    p.add_argument(
+        "--tet-loss",
+        type=str,
+        default=config["tet_loss"],
+        choices=["true", "false"],
+    )
     p.add_argument("--dataset", type=str, default=config["dataset"], choices=["cifar10", "cifar10-dvs"])
     p.add_argument("--data-dir", type=str, default=config["data_dir"])
     p.add_argument("--save-dir", type=str, default=config["save_dir"])
@@ -88,6 +104,11 @@ def main():
         build_parser,
         extra_validators=[validate_hpstattn_config],
     )
+    if config["dataset"] != args.dataset:
+        print(
+            f"ATTENTION: config dataset={config['dataset']!r} ≠ --dataset {args.dataset!r}. "
+            f"Utilisez --config {CONFIG_BY_DATASET.get(args.dataset, DEFAULT_CONFIG_PATH)}"
+        )
     config = apply_dataset_training_overrides(config, args.dataset)
     args.data_dir = resolve_project_path(args.data_dir, ROOT)
     args.save_dir = resolve_project_path(args.save_dir, ROOT)
@@ -95,6 +116,7 @@ def main():
     batch_size = resolve_training_batch_size(args.batch_size, config, profile)
     learning_rate = resolve_learning_rate(args.lr, batch_size, config, profile)
     hybrid_qkv = args.hybrid_qkv == "true"
+    membrane_block = args.membrane_block == "true"
     lif_backend = resolve_lif_backend(args.lif_backend)
 
     print(f"Config validée: {args.config}")
@@ -118,7 +140,8 @@ def main():
         f"Hyperparamètres: epochs={args.epochs}, batch_size={batch_size}, "
         f"lr={learning_rate}, embed_dim={args.embed_dim}, depth={args.depth}, "
         f"T={args.T}, chunk_size={args.chunk_size}, hybrid_qkv={hybrid_qkv}, "
-        f"attention_mode={args.attention_mode}"
+        f"attention_mode={args.attention_mode}, membrane_block={membrane_block}, "
+        f"tet_loss={config['tet_loss']}"
     )
 
     train_loader, val_loader = get_dataset_loaders(
@@ -148,6 +171,7 @@ def main():
         dvs=profile.dvs,
         T=args.T,
         attention_mode=args.attention_mode,
+        membrane_block=membrane_block,
     ).to(device)
 
     criterion = build_criterion(config)
@@ -185,6 +209,10 @@ def main():
             "lif_backend": lif_backend,
             "hybrid_qkv": hybrid_qkv,
             "attention_mode": args.attention_mode,
+            "membrane_block": membrane_block,
+            "tet_loss": config["tet_loss"],
+            "tet_lamb": config["tet_lamb"],
+            "tet_means": config["tet_means"],
             "dvs_augment": config.get("dvs_augment", "true"),
             "dvs_random_split": config.get("dvs_random_split", "false"),
             "num_workers": num_workers,
@@ -194,7 +222,7 @@ def main():
         },
         train_one_epoch=train_one_epoch,
         validate=validate,
-        mismatch_keys=("dataset", "embed_dim", "depth", "num_heads", "T", "batch_size", "chunk_size", "attention_mode"),
+        mismatch_keys=("dataset", "embed_dim", "depth", "num_heads", "T", "batch_size", "chunk_size", "attention_mode", "membrane_block"),
         run_name_prefix="hpstattn",
         project_root=ROOT,
     )

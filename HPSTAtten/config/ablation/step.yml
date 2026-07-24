@@ -1,10 +1,10 @@
-# Alias legacy → identique à train_cifar10.yml
-# Préférer : make train DATASET=cifar10  (choix auto de la config)
+# Ablation LR — StepLR (step_size=10 pour 30 epochs ; tuteur: 30 sur 200 ep.)
+# make ablation-lr-step DATASET=cifar10
 
-epochs: 200
+epochs: 30
 batch_size: 32
-learning_rate: 5.0e-4
-weight_decay: 0.06
+learning_rate: 3.0e-4
+weight_decay: 5.0e-4
 emb_dim: 256
 depth: 2
 num_heads: 8
@@ -23,14 +23,14 @@ tet_means: 1.0
 dvs_augment: "false"
 dvs_random_split: "false"
 augment_train: "true"
-rand_augment: "true"
-random_erasing: 0.25
-mixup: 0.5
+rand_augment: "false"
+random_erasing: 0.0
+mixup: 0.0
 label_smoothing: 0.1
-scheduler: cosine
-warmup_epochs: 20
-min_lr: 1.0e-5
-scheduler_step_size: 30
+scheduler: step
+warmup_epochs: 0
+min_lr: 1.0e-6
+scheduler_step_size: 10
 scheduler_gamma: 0.5
 scheduler_patience: 4
 scheduler_factor: 0.5

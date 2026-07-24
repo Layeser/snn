@@ -194,7 +194,7 @@ class HPSTAtten(nn.Module):
         x = self.out_lif(x).reshape(T, B, C, H, W).contiguous()
         return x
 
-    def forward(self, x):
+    def forward(self, x, return_contribution: bool = False):
         # x: (T, B, C, H, W)
         T, B, C, H, W = x.shape
         identity = x
@@ -214,5 +214,7 @@ class HPSTAtten(nn.Module):
 
         # (T, B, C, H, W) -> (T*B, C, H, W) -> proj -> (T, B, C, H, W)
         x = self.proj_bn(self.proj_conv(x.flatten(0, 1))).reshape(T, B, C, H, W).contiguous()
+        if return_contribution:
+            return x
         x = x + identity
         return x

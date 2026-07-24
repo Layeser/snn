@@ -33,6 +33,7 @@ from mlflow_tracking import (
     log_hyperparameters,
     start_training_run,
 )
+from training_recipe import step_scheduler
 
 
 TrainFn = Callable[..., tuple[float, float]]
@@ -166,6 +167,9 @@ def run_training(
                 device,
                 mixup_alpha=config["mixup"],
                 use_amp=config.get("use_amp", False),
+                use_tet=config.get("tet_loss", "false") == "true",
+                tet_means=float(config.get("tet_means", 1.0)),
+                tet_lamb=float(config.get("tet_lamb", 0.0)),
             )
             val_loss, val_acc = validate(
                 model,
@@ -173,10 +177,13 @@ def run_training(
                 criterion,
                 device,
                 use_amp=config.get("use_amp", False),
+                use_tet=config.get("tet_loss", "false") == "true",
+                tet_means=float(config.get("tet_means", 1.0)),
+                tet_lamb=float(config.get("tet_lamb", 0.0)),
             )
 
             if scheduler is not None:
-                scheduler.step()
+                step_scheduler(scheduler, val_loss=val_loss)
 
             log_epoch_metrics(epoch, train_loss, train_acc, val_loss, val_acc)
 

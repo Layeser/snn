@@ -4,7 +4,8 @@ Optimisation d'hyperparamètres HP-STAtten avec Optuna.
 
 Réutilise exactement la même boucle d'entraînement que scripts/train.py
 (run_training), mais :
-  - chaque essai (trial) tourne "from scratch" dans son propre save_dir ;
+  - chaque essai (trial) a son propre save_dir ;
+  - reprise automatique des essais interrompus (Ctrl+C / préemption OAR) ;
   - Optuna échantillonne les hyperparamètres (LR, weight_decay, mixup, ...) ;
   - un budget d'epochs réduit (--tune-epochs) accélère la recherche ;
   - le pruning (MedianPruner) coupe tôt les essais peu prometteurs ;
@@ -24,7 +25,11 @@ from typing import Any
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG_PATH = ROOT / "config" / "train.yml"
+DEFAULT_CONFIG_PATH = ROOT / "config" / "train_cifar10.yml"
+CONFIG_BY_DATASET = {
+    "cifar10": ROOT / "config" / "train_cifar10.yml",
+    "cifar10-dvs": ROOT / "config" / "train_cifar10-dvs.yml",
+}
 MLFLOW_PROJECT_PREFIX = "HP-STAtten"
 
 sys.path.insert(0, str(ROOT.parent / "common"))
@@ -45,6 +50,7 @@ from modules.spike import resolve_lif_backend
 from optuna_search import (
     create_study,
     optuna_storage_url,
+    resume_interrupted_trials,
     save_best_params,
     summarize_study,
 )
@@ -83,7 +89,25 @@ def build_tune_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--tune-arch", action="store_true", help="Inclure embed_dim/depth/num_heads dans la recherche")
     p.add_argument("--no-pruning", action="store_true", help="Désactiver le MedianPruner")
+    p.add_argument("--no-resume-interrupted", action="store_true",
+                   help="Ne pas reprendre les essais Optuna laissés en RUNNING")
     return p
+
+
+def params_from_trial(
+    trial_params: dict[str, Any],
+    base_config: dict[str, Any],
+    tune_arch: bool,
+) -> dict[str, Any]:
+    """Reconstruit le dict d'hyperparamètres à partir d'un essai Optuna stocké."""
+    params = dict(trial_params)
+    if not tune_arch:
+        params.setdefault("embed_dim", int(base_config["emb_dim"]))
+        params.setdefault("depth", int(base_config["depth"]))
+        params.setdefault("num_heads", int(base_config["num_heads"]))
+    if params.get("scheduler") != "cosine":
+        params.setdefault("warmup_epochs", int(base_config["warmup_epochs"]))
+    return params
 
 
 def suggest_hyperparams(trial, base_config: dict[str, Any], tune_epochs: int, tune_arch: bool) -> dict[str, Any]:
@@ -171,9 +195,9 @@ def main() -> None:
     hybrid_qkv = base_config["hybrid_qkv"] == "true"
     attention_mode = base_config["attention_mode"]
 
-    def objective(trial: optuna.Trial) -> float:
-        params = suggest_hyperparams(trial, base_config, tune_args.tune_epochs, tune_args.tune_arch)
+    study_dir = base_save_dir / study_name
 
+    def run_optuna_trial(trial, *, params: dict[str, Any], fresh: bool) -> float:
         trial_config = copy.deepcopy(base_config)
         trial_config["mixup"] = params["mixup"]
         trial_config["label_smoothing"] = params["label_smoothing"]
@@ -210,18 +234,20 @@ def main() -> None:
         trial_args = argparse.Namespace(
             config=str(config_path),
             epochs=tune_args.tune_epochs,
-            fresh=True,
-            resume="none",
+            fresh=fresh,
+            resume="auto" if not fresh else "none",
             resume_path=None,
             dataset=dataset,
             **params,
         )
-        save_dir = base_save_dir / study_name / f"trial_{trial.number}"
+        save_dir = study_dir / f"trial_{trial.number}"
 
-        def epoch_callback(epoch: int, metrics: dict[str, float]) -> None:
-            trial.report(metrics["val_acc"], step=epoch)
-            if trial.should_prune():
-                raise optuna.TrialPruned()
+        epoch_callback = None
+        if fresh and not tune_args.no_pruning:
+            def epoch_callback(epoch: int, metrics: dict[str, float]) -> None:
+                trial.report(metrics["val_acc"], step=epoch)
+                if trial.should_prune():
+                    raise optuna.TrialPruned()
 
         best_val_acc, _ = run_training(
             model=model,
@@ -263,6 +289,24 @@ def main() -> None:
         )
         return best_val_acc
 
+    if not tune_args.no_resume_interrupted:
+        n_resumed = resume_interrupted_trials(
+            study,
+            study_dir=study_dir,
+            tune_epochs=tune_args.tune_epochs,
+            run_trial=lambda trial, fresh: run_optuna_trial(
+                trial,
+                params=params_from_trial(trial.params, base_config, tune_args.tune_arch),
+                fresh=fresh,
+            ),
+        )
+        if n_resumed:
+            print(f"{n_resumed} essai(s) interrompu(s) repris avant les nouveaux essais.")
+
+    def objective(trial: optuna.Trial) -> float:
+        params = suggest_hyperparams(trial, base_config, tune_args.tune_epochs, tune_args.tune_arch)
+        return run_optuna_trial(trial, params=params, fresh=True)
+
     study.optimize(
         objective,
         n_trials=tune_args.n_trials,
@@ -271,7 +315,7 @@ def main() -> None:
     )
 
     print("\n" + summarize_study(study))
-    best_yaml = save_best_params(base_save_dir / study_name / "best_params.yml", study)
+    best_yaml = save_best_params(study_dir / "best_params.yml", study)
     print(f"Meilleurs hyperparamètres écrits → {best_yaml}")
 
 

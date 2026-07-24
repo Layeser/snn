@@ -9,10 +9,13 @@ Objectifs :
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from checkpointing import LAST_CHECKPOINT, load_checkpoint
 
 
 def optuna_storage_url(project_root: str | Path, *, db_name: str = "optuna.db") -> str:
@@ -74,6 +77,54 @@ def save_best_params(path: str | Path, study) -> Path:
     with out.open("w", encoding="utf-8") as f:
         yaml.safe_dump(payload, f, sort_keys=False, allow_unicode=True)
     return out
+
+
+def resume_interrupted_trials(
+    study,
+    *,
+    study_dir: Path,
+    tune_epochs: int,
+    run_trial: Callable[..., float],
+) -> int:
+    """Reprend les essais Optuna laissés en RUNNING (Ctrl+C, préemption OAR).
+
+    Pour chaque essai orphelin avec ``last.pt``, relance l'entraînement depuis
+    le checkpoint puis enregistre le score via ``study.tell``. Les essais sans
+    checkpoint sont marqués FAIL.
+    """
+    import optuna
+
+    study_dir = Path(study_dir)
+    resumed = 0
+    for trial in sorted(study.trials, key=lambda t: t.number):
+        if trial.state != optuna.trial.TrialState.RUNNING:
+            continue
+
+        save_dir = study_dir / f"trial_{trial.number}"
+        last_pt = save_dir / LAST_CHECKPOINT
+        label = f"trial_{trial.number}"
+
+        if not last_pt.exists():
+            print(f"Essai {label} interrompu sans checkpoint → marqué FAIL")
+            study.tell(trial.number, state=optuna.trial.TrialState.FAIL)
+            continue
+
+        checkpoint = load_checkpoint(last_pt, map_location="cpu")
+        epoch = int(checkpoint.get("epoch", 0))
+        best_val = float(checkpoint.get("best_val_acc", checkpoint.get("val_acc", 0.0)))
+
+        if epoch >= tune_epochs:
+            print(f"Essai {label} déjà au budget ({epoch}/{tune_epochs}) → {best_val:.2f}%")
+            study.tell(trial.number, best_val)
+            resumed += 1
+            continue
+
+        print(f"Reprise essai {label} depuis epoch {epoch}/{tune_epochs} (best val {best_val:.2f}%)")
+        best_val = run_trial(trial, fresh=False)
+        study.tell(trial.number, best_val)
+        resumed += 1
+
+    return resumed
 
 
 def summarize_study(study) -> str:

@@ -53,3 +53,62 @@ def build_cosine_scheduler(
         return min_factor + (1.0 - min_factor) * cosine
 
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+
+def build_cosine_annealing_scheduler(
+    optimizer: torch.optim.Optimizer,
+    epochs: int,
+    min_lr: float,
+) -> torch.optim.lr_scheduler.CosineAnnealingLR:
+    """CosineAnnealingLR pur (sans warmup), comme demandé en ablation."""
+    return torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=max(epochs, 1),
+        eta_min=min_lr,
+    )
+
+
+def build_plateau_scheduler(
+    optimizer: torch.optim.Optimizer,
+    *,
+    factor: float,
+    patience: int,
+    threshold: float,
+    min_lr: float,
+) -> torch.optim.lr_scheduler.ReduceLROnPlateau:
+    return torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=factor,
+        patience=patience,
+        threshold=threshold,
+        min_lr=min_lr,
+    )
+
+
+def build_step_scheduler(
+    optimizer: torch.optim.Optimizer,
+    *,
+    step_size: int,
+    gamma: float,
+) -> torch.optim.lr_scheduler.StepLR:
+    return torch.optim.lr_scheduler.StepLR(
+        optimizer,
+        step_size=step_size,
+        gamma=gamma,
+    )
+
+
+def scheduler_needs_val_loss(scheduler) -> bool:
+    return isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
+
+
+def step_scheduler(scheduler, *, val_loss: float | None = None) -> None:
+    if scheduler is None:
+        return
+    if scheduler_needs_val_loss(scheduler):
+        if val_loss is None:
+            raise ValueError("ReduceLROnPlateau requiert val_loss pour scheduler.step()")
+        scheduler.step(val_loss)
+    else:
+        scheduler.step()

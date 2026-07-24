@@ -18,11 +18,13 @@ class ClassificationHead(nn.Module):
         self.head_lif = make_lif(spike_mode, lif_backend=lif_backend)
         self.fc = nn.Linear(embed_dim, num_classes)
 
-    def forward(self, x):
+    def forward(self, x, return_timesteps: bool = False):
         # x: (T, B, D)
         x = self.head_lif(x)
         # x: (T, B, D)
         x = self.fc(x)
         # x: (T, B, num_classes)
+        if return_timesteps:
+            return x
         # temporal average -> (B, num_classes)
         return x.mean(0)

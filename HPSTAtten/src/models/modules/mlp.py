@@ -33,7 +33,7 @@ class MLP(nn.Module):
         self.fc2_bn = nn.BatchNorm2d(out_features)
         self.fc2_lif = lif()
 
-    def forward(self, x):
+    def forward(self, x, return_contribution: bool = False):
         T, B, C, H, W = x.shape
         identity = x
 
@@ -47,4 +47,6 @@ class MLP(nn.Module):
         x = self.fc2_lif(x)
         x = self.fc2_conv(x.flatten(0, 1))
         x = self.fc2_bn(x).reshape(T, B, self.c_output, H, W).contiguous()
+        if return_contribution:
+            return x
         return x + identity
