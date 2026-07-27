@@ -20,8 +20,8 @@ ssh_gateway: access.grid5000.fr
 
 # --- Chemins DISTANTS (sur Grid'5000) -------------------------
 # Dossier racine du projet (= votre repo git clone) sur le serveur,
-# relatif a $HOME. ex: $HOME/snn
-remote_project_dir: snn
+# relatif a $HOME. ex: $HOME/internship/snn
+remote_project_dir: internship/snn
 # Script de lancement OAR, relatif au dossier du projet distant.
 remote_start_script: scrip_grid_5000/start_run.sh
 
@@ -55,5 +55,5 @@ git_enabled: true
 git_branch: main
 # URL optionnelle : si renseignee, le projet est clone automatiquement
 # sur le serveur s'il n'existe pas encore.
-# ex: git@github.com:mon-org/snn.git  ou  https://github.com/mon-org/snn.git
-git_repo: ""
+# ex: git@github.com:Layeser/snn.git  ou  https://github.com/Layeser/snn.git
+git_repo: "git@github.com:Layeser/snn.git"

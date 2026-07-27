@@ -16,12 +16,13 @@
 # =============================================================
 
 # ---- 1) Ressources OAR (adapter selon le besoin) ----
+# Decommenter les deux lignes ci-dessous pour la file default + 1 GPU par job.
+# OAR_option -q default
 # OAR_option -l host=1/gpu=1
-# OAR_option -q besteffort
 
 # ---- 2) Identite du run (OBLIGATOIRE, garder ce format) ----
 RUN_NAME="mon_experience"
-export OUTPUT_DIR="$HOME/snn/HPSTAtten/save/$RUN_NAME"
+export OUTPUT_DIR="$HOME/internship/snn/HPSTAtten/save/$RUN_NAME"
 mkdir -p "$OUTPUT_DIR"
 
 # ---- 3) Commande d'entrainement (adapter a votre situation) ----

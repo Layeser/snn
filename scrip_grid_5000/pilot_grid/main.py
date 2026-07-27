@@ -196,10 +196,15 @@ def synchroniser_git(ssh_client):
         return True
 
     projet = CFG.remote_project_home()
+    projet_abs = CFG.remote_project_abs()
 
     # Clone auto si le projet n'existe pas encore et qu'une URL est fournie.
     if CFG.git_repo:
-        cmd_clone = f'[ -e "{projet}/.git" ] || git clone {CFG.git_repo} "{projet}"'
+        parent = os.path.dirname(projet_abs)
+        cmd_clone = (
+            f'mkdir -p "{parent}" && '
+            f'[ -e "{projet}/.git" ] || git clone {CFG.git_repo} "{projet_abs}"'
+        )
         _executer_et_journaliser(ssh_client, cmd_clone, "clone du repo (si absent)")
 
     cmd_pull = (
@@ -211,6 +216,8 @@ def synchroniser_git(ssh_client):
     code = _executer_et_journaliser(ssh_client, cmd_pull, f"pull de la branche '{CFG.git_branch}'")
     if code != 0:
         print("[git] Echec de la synchronisation -> lancement annule pour ce script.")
+        print(f"[git] Chemin attendu sur Grid5000 : {projet_abs}")
+        print("[git] Verifiez 'remote_project_dir' dans config.yaml (doit correspondre au clone).")
         return False
 
     # Trace du commit deploye (utile pour la reproductibilite).
