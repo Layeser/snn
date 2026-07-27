@@ -4,17 +4,18 @@ import os
 import tarfile
 import shutil
 import glob
+import argparse
 import paramiko
 from ssh_utils import *
+from config import load_config
 
-USER = "tgroussa"
-DOSSIER_RACINE = "scrip_grid_5000/scrip_run"
-FICHIER_ETAT_LOCAL = "scrip_grid_5000/pilot_grid/run_status.json"
+# La configuration (specifique a la personne / installation) est chargee au
+# demarrage dans main() puis exposee via cette variable de module.
+CFG = None
 
-# --- CONFIGURATION DE L'ORCHESTRATEUR ---
-# SITES_CIBLES = ["lille", "lyon", "nantes"]
-SITES_CIBLES = ["lille"]
-MAX_JOBS_PER_SITE = 2  
+# Ligne imprimee par start_run.sh a la fin d'un run reussi. Doit rester
+# STRICTEMENT identique a celle de scrip_grid_5000/start_run.sh.
+SENTINELLE_FIN = "=== EXPERIENCE TERMINEE AVEC SUCCES ==="
 
 # =============================================================
 # 1. ANALYSE ET SÉCURITÉ DES CHEMINS
@@ -63,8 +64,8 @@ def extraire_options_oar(ssh_client, chemin_distant_script):
 
 
 def generer_commande_soumission(ssh_client, chemin_distant_sh):
-    walltime_global = "10:00:00"
-    type_oar = "night"
+    walltime_global = CFG.walltime
+    type_oar = CFG.oar_type
     
     options_script = extraire_options_oar(ssh_client, chemin_distant_sh)
     
@@ -82,8 +83,7 @@ def generer_commande_soumission(ssh_client, chemin_distant_sh):
             arguments_oar.append(f'{flag} "{valeur}"')
             
     options_string = " ".join(arguments_oar)
-    home = "$HOME"
-    script_start = f"{home}/detr-projet/scrip_grid_5000/start_run.sh"
+    script_start = CFG.remote_start_script_path()
     
     return f'oarsub {options_string} "{script_start} {chemin_distant_sh}"'
 
@@ -93,8 +93,8 @@ def generer_commande_soumission(ssh_client, chemin_distant_sh):
 # =============================================================
 
 def charger_tous_les_etats():
-    if os.path.exists(FICHIER_ETAT_LOCAL):
-        with open(FICHIER_ETAT_LOCAL, 'r') as f:
+    if os.path.exists(CFG.state_file):
+        with open(CFG.state_file, 'r') as f:
             return json.load(f)
     return {}
 
@@ -109,7 +109,8 @@ def sauvegarder_etat_fichier(nom_fichier, etape, statut_oar, job_id, site, chemi
         "chemin_distant": chemin_distant,
         "derniere_verification": time.strftime("%Y-%m-%d %H:%M:%S")
     }
-    with open(FICHIER_ETAT_LOCAL, 'w') as f:
+    os.makedirs(os.path.dirname(CFG.state_file), exist_ok=True)
+    with open(CFG.state_file, 'w') as f:
         json.dump(tous_les_etats, f, indent=4)
 
 
@@ -137,7 +138,7 @@ def verifier_si_travail_fini(ssh_client, job_id, chemin_distant):
         return "KILLED"
 
     stdin, stdout, stderr = ssh_client.exec_command(f"tail -n 20 {fichier_stdout} 2>/dev/null")
-    if "Training time" in stdout.read().decode('utf-8'):
+    if SENTINELLE_FIN in stdout.read().decode('utf-8'):
         return "FINI"
 
     return "ERREUR"
@@ -169,14 +170,67 @@ def make_job(ssh_client, commande_soumission, site):
 # 4. LES ÉTAPES DU PIPELINE (ADAPTÉES)
 # =============================================================
 
+def _executer_et_journaliser(ssh_client, commande, titre):
+    """Execute une commande distante, affiche sa sortie et renvoie le code retour."""
+    print(f"[git] {titre}...")
+    stdin, stdout, stderr = ssh_client.exec_command(commande)
+    code = stdout.channel.recv_exit_status()
+    sortie = stdout.read().decode('utf-8').strip()
+    erreur = stderr.read().decode('utf-8').strip()
+    if sortie:
+        print(sortie)
+    if erreur:
+        print(erreur)
+    return code
+
+
+def synchroniser_git(ssh_client):
+    """Option A : met a jour le code du projet SUR LE FRONTEND avant le oarsub.
+
+    - clone automatiquement le repo s'il est absent (si git_repo est fourni) ;
+    - se place sur la branche configuree puis fait un pull en fast-forward.
+    Renvoie True si le code est a jour, False sinon (le lancement est alors
+    annule pour eviter d'executer une version obsolete du code).
+    """
+    if not CFG.git_enabled:
+        return True
+
+    projet = CFG.remote_project_home()
+
+    # Clone auto si le projet n'existe pas encore et qu'une URL est fournie.
+    if CFG.git_repo:
+        cmd_clone = f'[ -e "{projet}/.git" ] || git clone {CFG.git_repo} "{projet}"'
+        _executer_et_journaliser(ssh_client, cmd_clone, "clone du repo (si absent)")
+
+    cmd_pull = (
+        f'cd "{projet}" && '
+        f'git fetch --all --prune && '
+        f'git checkout {CFG.git_branch} && '
+        f'git pull --ff-only origin {CFG.git_branch}'
+    )
+    code = _executer_et_journaliser(ssh_client, cmd_pull, f"pull de la branche '{CFG.git_branch}'")
+    if code != 0:
+        print("[git] Echec de la synchronisation -> lancement annule pour ce script.")
+        return False
+
+    # Trace du commit deploye (utile pour la reproductibilite).
+    _executer_et_journaliser(ssh_client, f'cd "{projet}" && git rev-parse --short HEAD', "commit deploye")
+    return True
+
+
 def etape1_association(ssh_client, site, nom_fichier, chemin_local, chemin_distant):
     print(f"--- ÉTAPE 1 : Transfert et Lancement de {nom_fichier} ---")
+
+    # Option A : on rafraichit le code du projet AVANT tout (avant le oarsub).
+    if not synchroniser_git(ssh_client):
+        return None
+
     if not televerser_fichier(ssh_client, chemin_local, chemin_distant):
         return None
 
     stdin, stdout, stderr = ssh_client.exec_command(f"chmod +x {chemin_distant}")
     stdout.channel.recv_exit_status()
-    stdin, stdout, stderr = ssh_client.exec_command(f"chmod +x $HOME/detr-projet/scrip_grid_5000/start_run.sh")
+    stdin, stdout, stderr = ssh_client.exec_command(f"chmod +x {CFG.remote_start_script_path()}")
     stdout.channel.recv_exit_status()
 
     chemin_distant_out, run_name = trouver_chemin_output_distant(ssh_client, chemin_distant)
@@ -200,7 +254,7 @@ def etape2_verification(ssh_client, job_id, nom_fichier, chemin_distant):
     print(f"--- ÉTAPE 2 : Vérification du Statut pour {nom_fichier} ---")
     info = obtenir_etat_specifique(nom_fichier)
     
-    statut = obtenir_statut_oar(ssh_client, USER, job_id)
+    statut = obtenir_statut_oar(ssh_client, CFG.user, job_id)
     print(f"Statut OAR actuel : {statut}")
     
     if statut in ["R", "W", "F"]:
@@ -230,10 +284,10 @@ def etape3_recuperation(ssh_client, job_id, nom_fichier, chemin_distant, statut_
     if not chemin_distant_out or not run_name:
         return False
 
-    dossier_local_cible = f"outputs/{run_name}"
+    dossier_local_cible = f"{CFG.local_outputs_dir}/{run_name}"
     archive_distante = f"/tmp/{run_name}.tar"
-    archive_locale = f"outputs/{run_name}.tar"
-    os.makedirs("outputs", exist_ok=True)
+    archive_locale = f"{CFG.local_outputs_dir}/{run_name}.tar"
+    os.makedirs(CFG.local_outputs_dir, exist_ok=True)
 
     try:
         print(f"[SSH] Compression distante...")
@@ -246,7 +300,7 @@ def etape3_recuperation(ssh_client, job_id, nom_fichier, chemin_distant, statut_
             return False
 
         with tarfile.open(archive_locale, "r") as tar:
-            tar.extractall(path="outputs")
+            tar.extractall(path=CFG.local_outputs_dir)
         os.remove(archive_locale)
         print(f"-> Sauvegardé localement dans : {dossier_local_cible}")
 
@@ -263,7 +317,7 @@ def etape3_recuperation(ssh_client, job_id, nom_fichier, chemin_distant, statut_
 
 def archiver_script_local(nom_fichier, chemin_actuel):
     """ Déplace physiquement le script exécuté dans le dossier 'archive' """
-    dossier_archive = f"{DOSSIER_RACINE}/archive"
+    dossier_archive = f"{CFG.local_scripts_root}/archive"
     os.makedirs(dossier_archive, exist_ok=True)
     chemin_dest = f"{dossier_archive}/{nom_fichier}"
     
@@ -317,27 +371,39 @@ def piloter_un_script(ssh_client, site, nom_fichier, info):
 # =============================================================
 
 def main():
+    global CFG
+
+    parser = argparse.ArgumentParser(description="Orchestrateur Grid'5000")
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Chemin vers le fichier de configuration YAML (defaut: config.yaml).",
+    )
+    args = parser.parse_args()
+    CFG = load_config(args.config)
+
     print("=======================================================")
     print("LANCEMENT DE LA TOURNÉE DE L'ORCHESTRATEUR GRID'5000")
+    print(f"Utilisateur : {CFG.user} | Sites : {CFG.sites}")
     print("=======================================================")
     
     tous_les_etats = charger_tous_les_etats()
     
-    for site in SITES_CIBLES:
+    for site in CFG.sites:
         # Trouver les scripts liés à ce site qui tournent ou attendent d'être récupérés
         scripts_du_site = [(nom, info) for nom, info in tous_les_etats.items() if info.get("site") == site and info.get("etape") != "TERMINE"]
         
         # Compter les jobs actifs
         nb_actifs = decompte_jobs_actifs_site(tous_les_etats, site)
-        places_libres = MAX_JOBS_PER_SITE - nb_actifs
+        places_libres = CFG.max_jobs_per_site - nb_actifs
         
         # Chercher s'il y a des scripts orphelins à la racine du dossier local
-        scripts_racine = [f for f in glob.glob(f"{DOSSIER_RACINE}/*.sh") if os.path.isfile(f)]
+        scripts_racine = [f for f in glob.glob(f"{CFG.local_scripts_root}/*.sh") if os.path.isfile(f)]
         
         # On ne se connecte à un serveur QUE s'il y a des fichiers à checker OU s'il y a de la place pour lancer
         if scripts_du_site or (places_libres > 0 and scripts_racine):
-            print(f"\n>>> Connexion au site : {site.upper()} (Jobs actifs : {nb_actifs}/{MAX_JOBS_PER_SITE})")
-            bastion, ssh_client = connecter_serveur_final(USER, site)
+            print(f"\n>>> Connexion au site : {site.upper()} (Jobs actifs : {nb_actifs}/{CFG.max_jobs_per_site})")
+            bastion, ssh_client = connecter_serveur_final(CFG.user, site, CFG.ssh_gateway)
             if not ssh_client:
                 continue
                 
@@ -349,7 +415,7 @@ def main():
                 # On recharge les états (car des scripts ont pu passer en "TERMINE")
                 tous_les_etats = charger_tous_les_etats()
                 nb_actifs = decompte_jobs_actifs_site(tous_les_etats, site)
-                places_libres = MAX_JOBS_PER_SITE - nb_actifs
+                places_libres = CFG.max_jobs_per_site - nb_actifs
                 
                 # ACTION 2 : Si places libres, on attribue de nouveaux scripts de la racine
                 if places_libres > 0 and scripts_racine:
@@ -360,13 +426,13 @@ def main():
                         nom_f = os.path.basename(script_a_attribuer)
                         
                         # Déplacement physique vers le sous-dossier du site (ex: scrip_run/lille/)
-                        dossier_site_local = f"{DOSSIER_RACINE}/{site}"
+                        dossier_site_local = f"{CFG.local_scripts_root}/{site}"
                         os.makedirs(dossier_site_local, exist_ok=True)
                         nouveau_chemin_local = f"{dossier_site_local}/{nom_f}"
                         shutil.move(script_a_attribuer, nouveau_chemin_local)
                         
-                        # Chemin distant correspondant au sous-dossier du site
-                        chemin_distant_site = f"/home/{USER}/detr-projet/{dossier_site_local}/{nom_f}"
+                        # Chemin distant correspondant au sous-dossier du site (miroir du local)
+                        chemin_distant_site = CFG.remote_script_path(f"{dossier_site_local}/{nom_f}")
                         
                         print(f" -> Déplacement local : {script_a_attribuer} -> {nouveau_chemin_local}")
                         

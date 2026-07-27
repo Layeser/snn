@@ -1,0 +1,59 @@
+# =============================================================
+# Configuration de l'orchestrateur Grid'5000
+# -------------------------------------------------------------
+# Un nouvel utilisateur n'a qu'a editer CE fichier : aucune
+# modification du code Python (main.py / ssh_utils.py) n'est
+# necessaire.
+#
+# Chemin de config par defaut : ce fichier (config.yaml a cote
+# de main.py). Peut etre surcharge via :
+#   - variable d'env : PILOT_CONFIG=/chemin/vers/config.yaml
+#   - argument CLI    : python main.py --config /chemin/config.yaml
+# =============================================================
+
+# --- Identite / connexion SSH ---------------------------------
+# Login Grid'5000 (obligatoire, propre a chaque personne)
+# >>> A REMPLACER par VOTRE login Grid'5000 <<<
+user: kasekou
+# Passerelle SSH (serveur de rebond). Ne change quasiment jamais.
+ssh_gateway: access.grid5000.fr
+
+# --- Chemins DISTANTS (sur Grid'5000) -------------------------
+# Dossier racine du projet (= votre repo git clone) sur le serveur,
+# relatif a $HOME. ex: $HOME/snn
+remote_project_dir: snn
+# Script de lancement OAR, relatif au dossier du projet distant.
+remote_start_script: scrip_grid_5000/start_run.sh
+
+# --- Chemins LOCAUX (sur votre machine) -----------------------
+# Ces chemins sont relatifs au repertoire depuis lequel vous
+# lancez main.py (racine du projet).
+# Dossier ou l'on depose les scripts .sh a lancer.
+local_scripts_root: scrip_grid_5000/scrip_run
+# Dossier ou seront rapatries les resultats.
+local_outputs_dir: outputs
+# Fichier d'etat (machine a etats des runs).
+state_file: scrip_grid_5000/pilot_grid/run_status.json
+
+# --- Orchestration --------------------------------------------
+# Sites Grid'5000 cibles (ex: [lille, lyon, nantes]).
+sites:
+  - lille
+# Nombre max de jobs simultanes par site.
+max_jobs_per_site: 2
+
+# --- Options OAR par defaut -----------------------------------
+# Surchargables par script via les lignes '# OAR_option ...'.
+walltime: "10:00:00"
+oar_type: night
+
+# --- Synchronisation git (Option A) ---------------------------
+# Avant chaque soumission, l'orchestrateur fait un 'git pull' du projet
+# sur le frontend du site (qui a acces Internet). Ainsi le code execute
+# correspond toujours a votre dernier commit pousse sur GitHub.
+git_enabled: true
+git_branch: main
+# URL optionnelle : si renseignee, le projet est clone automatiquement
+# sur le serveur s'il n'existe pas encore.
+# ex: git@github.com:mon-org/snn.git  ou  https://github.com/mon-org/snn.git
+git_repo: ""

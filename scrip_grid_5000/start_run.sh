@@ -1,75 +1,42 @@
 #!/bin/bash
-# ex commande run : oarsub -S "./start_run scrip/ex_train_model.sh"
+# =============================================================
+# Lanceur GENERIQUE (mono-GPU) appele par l'orchestrateur :
+#   oarsub ... "start_run.sh <chemin_experience.sh>"
+#
+# Role : se placer a la racine du projet, activer le venv, puis
+# executer le script d'experience passe en argument. Aucune
+# hypothese sur le dataset / le modele : tout est dans l'experience.
+# =============================================================
+set -euo pipefail
 
-# Sécurité : On vérifie l'argument
-if [ -z "$1" ]; then
-    echo "Erreur : Tu dois donner le nom du script d'entraînement en argument !"
+# --- Securite : on attend le chemin du script d'experience ---
+if [ -z "${1:-}" ]; then
+    echo "Erreur : chemin du script d'experience attendu en argument."
     exit 1
 fi
+SCRIPT_EXPERIENCE="$1"
 
-SCRIPT_ENTRAINEMENT=$1
+# --- Racine du projet = dossier parent de scrip_grid_5000/ ---
+# (ce script se trouve dans <projet>/scrip_grid_5000/start_run.sh)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
 
-# ==============================================================================
-# CONFIGURATION MULTI-NODE (GRID'5000 / OAR)
-# ==============================================================================
-# 1. Récupérer la liste des machines uniques attribuées par OAR
-NODES=$(uniq "$OAR_NODE_FILE")
+# --- Activation de l'environnement Python (si present) ---
+if [ -f ".venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+    echo "Environnement virtuel active : $PROJECT_DIR/.venv"
+else
+    echo "Attention : aucun .venv trouve a la racine ($PROJECT_DIR)."
+fi
 
-# 2. Définir le "Master Node"
-export MASTER_NODE=$(echo "$NODES" | head -n 1)
+echo "=== Lancement de l'experience ==="
+echo "Projet      : $PROJECT_DIR"
+echo "Experience  : $SCRIPT_EXPERIENCE"
+echo "================================="
 
-# 3. Compter le nombre total de machines (hosts)
-export NNODES=$(echo "$NODES" | wc -l)
+bash "$SCRIPT_EXPERIENCE"
 
-# 4. Définir le port et l'ID du job
-export PORT=29500
-export JOB_ID=$OAR_JOB_ID
-
-
-# ==============================================================================
-# GESTION DYNAMIQUE ET SÉCURISÉE DU PORT DE COMMUNICATION
-# ==============================================================================
-# 2. Boucle de vérification : tant que le port est détecté comme "occupé"
-while ss -tln | grep -q ":$PORT " 2>/dev/null; do
-    echo "⚠️ Le port $PORT est déjà utilisé par un autre utilisateur."
-    
-    # Génération d'un port aléatoire sécurisé entre 20000 et 60000
-    export PORT=$(( 20000 + RANDOM % 40000 ))
-    echo "🔄 Tentative de repli sur le port aléatoire : $PORT"
-done
-
-echo "✅ Port de communication validé et libre : $PORT"
-
-
-echo "=== CONFIGURATION MULTI-NODE DU CLUSTER ==="
-echo "Master Node     : $MASTER_NODE"
-echo "Nombre de hosts : $NNODES"
-echo "==========================================="
-
-# On boucle sur chaque machine pour lancer l'entraînement
-for NODE in $NODES; do
-    echo "-> Configuration de l'environnement et lancement sur : $NODE"
-    
-    # On ouvre un bloc multi-ligne propre pour oarsh
-    oarsh "$NODE" "
-        export MASTER_NODE='$MASTER_NODE'
-        export NNODES='$NNODES'
-        export PORT='$PORT'
-        export JOB_ID='$JOB_ID'
-        export SCRIPT_ENTRAINEMENT='$SCRIPT_ENTRAINEMENT'
-
-        # ======================================================================
-        # ACTIVATION DE L'ENVIRONNEMENT (Exécuté sur chaque hôte)
-        # ======================================================================
-        #source /etc/profile.d/modules.sh
-        cd \$HOME/detr-projet || exit 1
-        source .venv/bin/activate
-
-        # Lancement effectif du script d'entraînement
-        bash \$SCRIPT_ENTRAINEMENT
-    " &
-done
-
-# TRÈS IMPORTANT : On attend que toutes les machines en arrière-plan finissent
-wait
-echo "=== Tout le cluster a terminé l'entraînement ! ==="
+# Ligne sentinelle : sert a l'orchestrateur pour detecter la fin OK du run.
+echo "=== EXPERIENCE TERMINEE AVEC SUCCES ==="
