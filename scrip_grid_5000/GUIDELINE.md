@@ -81,7 +81,7 @@ git_branch: main
 
 ## Ressources OAR : `gpu=1` ou `gpu=2` ?
 
-**Gardez** `gpu=1` et décommentez **les deux lignes** dans chaque `.sh` :
+**Gardez** `gpu=1` et activez **les deux lignes** `# OAR_option` dans chaque `.sh` :
 
 ```bash
 # OAR_option -q default
@@ -100,7 +100,9 @@ Notre entraînement HPSTAtten est **mono-GPU** (`python -m scripts.train`). Donc
 - `gpu=1` → 2 jobs/site = 2 expériences différentes qui tournent en même temps.
 - `gpu=2` → inutile sauf si vous modifiez le code pour du multi-GPU.
 
-La file `default` (pas `besteffort`) :
+> **Important** : le `#` devant `OAR_option` est **obligatoire** — c'est le format lu par
+> l'orchestrateur (pas une ligne « désactivée »). Pour changer de file, modifiez la
+> valeur (`default` → `besteffort`), sans retirer le `#`.
 
 ```bash
 # OAR_option -q default    # réservation classique
@@ -286,11 +288,11 @@ oarstat -u kasekou
 
 ## Checklist avant un lancement
 
-- [ ] `~/snn` prêt sur Grid'5000 (`make setup`, `make download-data`)
+- [ ] `~/internship/snn` prêt sur Grid'5000 (`make setup`, `make download-data`)
 - [ ] `config.yaml` : login, sites, `max_jobs_per_site`
 - [ ] SSH sans mot de passe vers `access.grid5000.fr`
 - [ ] Chaque `.sh` a un `RUN_NAME` **unique**
-- [ ] `# OAR_option -q default` et `# OAR_option -l host=1/gpu=1` décommentés
+- [ ] Chaque `.sh` a les lignes `# OAR_option -q ...` et `# OAR_option -l host=1/gpu=1` renseignées
 - [ ] Code poussé sur GitHub (`git push`)
 - [ ] Fichiers copiés dans `scrip_run/`
 - [ ] Lancement depuis la **racine** du repo

@@ -44,8 +44,30 @@ def trouver_chemin_output_distant(ssh_client, fichier_distant):
     cmd_echo = f'echo "{chemin_avec_home}"'
     stdin, stdout, stderr = ssh_client.exec_command(cmd_echo)
     chemin_absolu_distant = stdout.read().decode('utf-8').strip()
-    
+
+    legacy = f"/home/{CFG.user}/snn"
+    attendu = CFG.remote_project_abs()
+    if chemin_absolu_distant.startswith(legacy + "/") or chemin_absolu_distant == legacy:
+        corrige = chemin_absolu_distant.replace(legacy, attendu, 1)
+        print(
+            f"[Orchestrateur] OUTPUT_DIR obsolete dans le script : "
+            f"{chemin_absolu_distant} -> {corrige}"
+        )
+        chemin_absolu_distant = corrige
+
     return chemin_absolu_distant, run_name
+
+
+def _parse_oar_option_line(ligne: str) -> tuple[str, str] | None:
+    """Extrait flag/valeur d'une ligne '# OAR_option ...' ou 'OAR_option ...'."""
+    ligne = ligne.strip()
+    for prefix in ("# OAR_option", "OAR_option"):
+        if ligne.startswith(prefix):
+            contenu = ligne[len(prefix) :].strip()
+            parts = contenu.split(maxsplit=1)
+            if len(parts) == 2:
+                return parts[0], parts[1]
+    return None
 
 
 def extraire_options_oar(ssh_client, chemin_distant_script):
@@ -53,11 +75,10 @@ def extraire_options_oar(ssh_client, chemin_distant_script):
     try:
         stdin, stdout, stderr = ssh_client.exec_command(f"cat {chemin_distant_script}")
         for ligne in stdout:
-            if ligne.startswith("# OAR_option"):
-                contenu = ligne.replace("# OAR_option", "").strip()
-                parts = contenu.split(maxsplit=1)
-                if len(parts) == 2:
-                    options[parts[0]] = parts[1]
+            parsed = _parse_oar_option_line(ligne)
+            if parsed:
+                flag, valeur = parsed
+                options[flag] = valeur
     except Exception as e:
         print(f"Erreur lors de la lecture distante des options OAR : {e}")
     return options
@@ -92,10 +113,41 @@ def generer_commande_soumission(ssh_client, chemin_distant_sh):
 # 2. GESTION DE L'ÉTAT LOCAL (JSON ÉVOLUÉ)
 # =============================================================
 
+def _normaliser_chemin_distant(chemin: str | None) -> str | None:
+    """Corrige les chemins distants obsoletes (ex: ~/snn -> ~/internship/snn)."""
+    if not chemin:
+        return chemin
+
+    attendu = CFG.remote_project_abs()
+    legacy = f"/home/{CFG.user}/snn"
+    if chemin.startswith(legacy + "/") or chemin == legacy:
+        corrige = chemin.replace(legacy, attendu, 1)
+        print(f"[Orchestrateur] Chemin distant corrige : {chemin} -> {corrige}")
+        return corrige
+    return chemin
+
+
+def _migrer_etats_obsoletes(etats: dict) -> dict:
+    """Reecrit les chemins distants legacy dans run_status.json."""
+    modifie = False
+    for info in etats.values():
+        chemin = info.get("chemin_distant")
+        corrige = _normaliser_chemin_distant(chemin)
+        if corrige != chemin:
+            info["chemin_distant"] = corrige
+            modifie = True
+    if modifie:
+        os.makedirs(os.path.dirname(CFG.state_file), exist_ok=True)
+        with open(CFG.state_file, "w") as f:
+            json.dump(etats, f, indent=4)
+    return etats
+
+
 def charger_tous_les_etats():
     if os.path.exists(CFG.state_file):
         with open(CFG.state_file, 'r') as f:
-            return json.load(f)
+            etats = json.load(f)
+        return _migrer_etats_obsoletes(etats)
     return {}
 
 def sauvegarder_etat_fichier(nom_fichier, etape, statut_oar, job_id, site, chemin_local, chemin_distant):
@@ -158,11 +210,24 @@ def obtenir_statut_oar(ssh_client, user, job_id):
 def make_job(ssh_client, commande_soumission, site):
     print(f"Soumission du job sur {site} avec la commande : {commande_soumission}")
     stdin, stdout, stderr = ssh_client.exec_command(commande_soumission)
-    sortie = stdout.read().decode('utf-8')
-    
-    for ligne in sortie.splitlines():
-        if "OAR_JOB_ID=" in ligne:
-            return ligne.split("=")[1].strip()
+    code = stdout.channel.recv_exit_status()
+    sortie = stdout.read().decode("utf-8").strip()
+    erreur = stderr.read().decode("utf-8").strip()
+
+    for flux in (sortie, erreur):
+        for ligne in flux.splitlines():
+            if "OAR_JOB_ID=" in ligne:
+                job_id = ligne.split("=", 1)[1].strip()
+                print(f"-> Job lance avec succes. ID : {job_id}")
+                return job_id
+
+    print("[oarsub] Echec de soumission (aucun OAR_JOB_ID recu).")
+    if sortie:
+        print(f"[oarsub stdout] {sortie}")
+    if erreur:
+        print(f"[oarsub stderr] {erreur}")
+    if code != 0:
+        print(f"[oarsub] code retour : {code}")
     return None
 
 
@@ -252,7 +317,6 @@ def etape1_association(ssh_client, site, nom_fichier, chemin_local, chemin_dista
     if not job_id:
         return None
 
-    print(f"-> Job lancé avec succès. ID : {job_id}")
     sauvegarder_etat_fichier(nom_fichier, "ETAPE_2", "Lancement", job_id, site, chemin_local, chemin_distant)
     return job_id
 

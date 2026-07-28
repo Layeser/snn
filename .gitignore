@@ -66,3 +66,6 @@ scrip_grid_5000/scrip_run/lille/
 scrip_grid_5000/scrip_run/archive/
 scrip_grid_5000/scrip_run/*.sh
 scrip_grid_5000/pilot_grid/run_status.json
+
+assets/
+.cursor/

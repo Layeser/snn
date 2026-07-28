@@ -55,29 +55,24 @@ def deconnecter_serveurs(bastion, client_final):
 
 def extraire_options_oar(ssh_client, chemin_distant_script):
     """
-    Lit le script bash directement SUR LE SERVEUR DISTANT et extrait 
-    toutes les lignes commençant par '# OAR_option'.
+    Lit le script bash sur le serveur distant et extrait les lignes OAR_option
+    (avec ou sans '#' en tete de ligne).
     """
     options = {}
     try:
-        # On utilise 'cat' pour lire le fichier qui vient d'être téléversé
         stdin, stdout, stderr = ssh_client.exec_command(f"cat {chemin_distant_script}")
-        
-        # stdout permet de boucler directement sur les lignes de texte renvoyées par le serveur
         for ligne in stdout:
-            if ligne.startswith("# OAR_option"):
-                # On nettoie la ligne pour enlever "# OAR_option"
-                contenu = ligne.replace("# OAR_option", "").strip()
-                
-                # On sépare le flag du reste de la valeur au premier espace
-                parts = contenu.split(maxsplit=1)
-                if len(parts) == 2:
-                    flag = parts[0]   # ex: "-p" ou "-l"
-                    valeur = parts[1] # ex: "gpu-16GB AND..." ou "host=1,gpu=2"
-                    options[flag] = valeur
+            ligne = ligne.strip()
+            for prefix in ("# OAR_option", "OAR_option"):
+                if ligne.startswith(prefix):
+                    contenu = ligne[len(prefix) :].strip()
+                    parts = contenu.split(maxsplit=1)
+                    if len(parts) == 2:
+                        options[parts[0]] = parts[1]
+                    break
     except Exception as e:
         print(f"Erreur lors de la lecture distante des options OAR : {e}")
-        
+
     return options
 
 
