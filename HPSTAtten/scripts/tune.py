@@ -54,6 +54,7 @@ from optuna_search import (
     save_best_params,
     summarize_study,
 )
+from reproducibility import set_seed
 from train_integration import (
     apply_dataset_training_overrides,
     build_criterion,
@@ -87,6 +88,12 @@ def build_tune_parser() -> argparse.ArgumentParser:
     p.add_argument("--T", type=int, default=None, help="Timesteps fixes pour l'étude")
     p.add_argument("--num-workers", type=int, default=None)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument(
+        "--train-fraction",
+        type=float,
+        default=1.0,
+        help="Fraction stratifiée du train à utiliser (ex: 0.333 pour 1/3)",
+    )
     p.add_argument("--tune-arch", action="store_true", help="Inclure embed_dim/depth/num_heads dans la recherche")
     p.add_argument("--no-pruning", action="store_true", help="Désactiver le MedianPruner")
     p.add_argument("--no-resume-interrupted", action="store_true",
@@ -150,6 +157,7 @@ def main() -> None:
     profile = get_dataset_profile(dataset)
     device = resolve_device(tune_args.device or base_config["device"])
     use_amp = configure_cuda_runtime(device)
+    set_seed(tune_args.seed)
 
     # Batch/T fixes pour toute l'étude → on construit les loaders une seule fois.
     batch_size = resolve_training_batch_size(
@@ -170,6 +178,8 @@ def main() -> None:
         download=True,
         project_root=ROOT,
         T=T,
+        train_fraction=tune_args.train_fraction,
+        seed=tune_args.seed,
         **loader_kwargs_from_config(loader_config, dataset),
     )
 
@@ -188,6 +198,7 @@ def main() -> None:
     print(f"Étude Optuna: {study_name}")
     print(f"Storage: {storage}")
     print(f"Dataset: {profile.display_name} | batch={batch_size} T={T} | device={device} AMP={use_amp}")
+    print(f"Seed: {tune_args.seed} | train_fraction: {tune_args.train_fraction}")
     print(f"Budget: {tune_args.n_trials} essais × {tune_args.tune_epochs} epochs | pruning={not tune_args.no_pruning}")
     print(f"Train batches: {len(train_loader)} | Val batches: {len(val_loader)}")
 
@@ -276,6 +287,8 @@ def main() -> None:
                 "hybrid_qkv": hybrid_qkv,
                 "attention_mode": attention_mode,
                 "num_workers": num_workers,
+                "seed": tune_args.seed,
+                "train_fraction": tune_args.train_fraction,
                 "use_amp": use_amp,
                 "device": str(device),
                 **params,

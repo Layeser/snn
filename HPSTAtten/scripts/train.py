@@ -47,6 +47,7 @@ from train_integration import (
     loader_kwargs_from_config,
     recipe_hyperparams,
 )
+from reproducibility import set_seed
 from training_runner import run_training
 from utils.config import parse_train_args
 from utils.config_schema import HPSTATTEN_CONFIG_SCHEMA, validate_hpstattn_config
@@ -93,6 +94,13 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
     p.add_argument("--data-dir", type=str, default=config["data_dir"])
     p.add_argument("--save-dir", type=str, default=config["save_dir"])
     p.add_argument("--device", type=str, default=config["device"])
+    p.add_argument("--seed", type=int, default=42, help="Graine aléatoire (reproductibilité)")
+    p.add_argument(
+        "--train-fraction",
+        type=float,
+        default=1.0,
+        help="Fraction stratifiée du train à utiliser (ex: 0.333 pour 1/3)",
+    )
     add_checkpoint_args(p)
     return p
 
@@ -123,6 +131,7 @@ def main():
     print(f"Dataset: {profile.display_name} ({profile.name})")
     device = resolve_device(args.device)
     config["use_amp"] = configure_cuda_runtime(device)
+    set_seed(args.seed)
     num_workers = resolve_num_workers(args.num_workers, profile)
     save_dir = Path(args.save_dir)
 
@@ -130,6 +139,7 @@ def main():
     print(f"Data dir: {args.data_dir}")
     print(f"AMP: {config['use_amp']}")
     print(f"DataLoader workers: {num_workers}")
+    print(f"Seed: {args.seed} | train_fraction: {args.train_fraction}")
     print(f"LIF backend: {lif_backend} (config lif_backend={args.lif_backend})")
     if lif_backend == "torch" and str(device) == "cuda":
         print(
@@ -152,6 +162,8 @@ def main():
         download=True,
         project_root=ROOT,
         T=args.T,
+        train_fraction=args.train_fraction,
+        seed=args.seed,
         **loader_kwargs_from_config(config, args.dataset),
     )
     print(f"Train batches: {len(train_loader)} | Val batches: {len(val_loader)}")
@@ -216,6 +228,8 @@ def main():
             "dvs_augment": config.get("dvs_augment", "true"),
             "dvs_random_split": config.get("dvs_random_split", "false"),
             "num_workers": num_workers,
+            "seed": args.seed,
+            "train_fraction": args.train_fraction,
             "use_amp": config["use_amp"],
             "device": str(device),
             **recipe_hyperparams(config),

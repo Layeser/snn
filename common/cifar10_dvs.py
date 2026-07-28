@@ -17,7 +17,9 @@ from torch.utils.data import DataLoader, Subset
 
 from cifar10 import _resolve_data_dir
 from cifar10_dvs_patch import apply_cifar10_dvs_numpy2_patch, prepare_cifar10_dvs_frames
+from data_subset import apply_train_fraction
 from dvs_augment import build_dvs_train_transform
+from reproducibility import dataloader_generator, seed_worker
 
 CIFAR10_DVS_NUM_CLASSES = 10
 CIFAR10_DVS_TRAIN_RATIO = 0.9
@@ -113,6 +115,8 @@ def get_cifar10_dvs_loaders(
     train_ratio: float = CIFAR10_DVS_TRAIN_RATIO,
     augment_train: bool = True,
     random_split: bool = False,
+    train_fraction: float = 1.0,
+    seed: int | None = None,
 ):
     apply_cifar10_dvs_numpy2_patch()
 
@@ -142,6 +146,16 @@ def get_cifar10_dvs_loaders(
         f"— {int(train_ratio * 100)}/{int((1 - train_ratio) * 100)} stratifié par classe."
     )
 
+    if train_fraction < 1.0:
+        if seed is None:
+            raise ValueError("train_fraction < 1.0 requiert un seed pour un sous-échantillonnage reproductible.")
+        full_train_size = len(train_set)
+        train_set = apply_train_fraction(train_set, train_fraction, seed)
+        print(
+            f"Sous-échantillon train DVS: {len(train_set)}/{full_train_size} "
+            f"({train_fraction:.1%}, stratifié, seed={seed})."
+        )
+
     if augment_train:
         train_set = _AugmentedFrameDataset(train_set, build_dvs_train_transform())
         print("Augmentation DVS activée (flip + SNNAugmentWide) sur le train.")
@@ -155,6 +169,12 @@ def get_cifar10_dvs_loaders(
     if num_workers > 0:
         loader_kwargs["persistent_workers"] = True
         loader_kwargs["prefetch_factor"] = 2
+
+    loader_seed = seed if seed is not None else None
+    if loader_seed is not None:
+        loader_kwargs["generator"] = dataloader_generator(loader_seed)
+        if num_workers > 0:
+            loader_kwargs["worker_init_fn"] = seed_worker
 
     train_loader = DataLoader(train_set, shuffle=True, **loader_kwargs)
     val_loader = DataLoader(val_set, shuffle=False, **loader_kwargs)

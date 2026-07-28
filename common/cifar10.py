@@ -10,6 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from data_download import ensure_cifar10
+from data_subset import apply_train_fraction
+from reproducibility import dataloader_generator, seed_worker
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
@@ -73,6 +75,8 @@ def get_cifar10_loaders(
     augment_train: bool = True,
     rand_augment: bool = True,
     random_erasing: float = 0.25,
+    train_fraction: float = 1.0,
+    seed: int | None = None,
 ):
     data_dir = _resolve_data_dir(data_dir, project_root)
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -89,12 +93,24 @@ def get_cifar10_loaders(
     train_set = datasets.CIFAR10(root=str(data_dir), train=True, download=False, transform=train_tf)
     val_set = datasets.CIFAR10(root=str(data_dir), train=False, download=False, transform=val_tf)
 
+    if train_fraction < 1.0:
+        if seed is None:
+            raise ValueError("train_fraction < 1.0 requiert un seed pour un sous-échantillonnage reproductible.")
+        train_set = apply_train_fraction(train_set, train_fraction, seed)
+        print(
+            f"Sous-échantillon train CIFAR-10: {len(train_set)}/{50000} "
+            f"({train_fraction:.1%}, stratifié, seed={seed})."
+        )
+
+    loader_seed = seed if seed is not None else None
     train_loader = DataLoader(
         train_set,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
+        generator=dataloader_generator(loader_seed),
+        worker_init_fn=seed_worker if num_workers > 0 and loader_seed is not None else None,
     )
     val_loader = DataLoader(
         val_set,

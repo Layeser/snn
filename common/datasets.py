@@ -118,6 +118,8 @@ def get_dataset_loaders(
     download=True,
     project_root: Path | None = None,
     T: int = 4,
+    train_fraction: float = 1.0,
+    seed: int | None = None,
     **loader_kwargs,
 ):
     profile = get_dataset_profile(dataset)
@@ -128,6 +130,8 @@ def get_dataset_loaders(
             num_workers=num_workers,
             download=download,
             project_root=project_root,
+            train_fraction=train_fraction,
+            seed=seed,
             **loader_kwargs,
         )
     if profile.name == "cifar10-dvs":
@@ -138,6 +142,8 @@ def get_dataset_loaders(
             download=download,
             project_root=project_root,
             frames_number=T,
+            train_fraction=train_fraction,
+            seed=seed,
             **loader_kwargs,
         )
     raise ValueError(f"Dataset non supporté: {dataset!r}")
