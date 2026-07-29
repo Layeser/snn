@@ -31,9 +31,11 @@ class Config:
     sites: list = field(default_factory=lambda: ["lille"])
     max_jobs_per_site: int = 2
 
-    # Options OAR par defaut
+    # Options OAR par defaut (prioritaires sur les # OAR_option des scripts)
     walltime: str = "10:00:00"
-    oar_type: str = "night"
+    oar_type: str = "night"  # day | night | besteffort | ...
+    oar_queue: str = ""  # default | besteffort | vide = pas de -q explicite
+    oar_resources: str = "host=1/gpu=1"  # ressources -l (sans walltime)
 
     # Synchronisation git (Option A : pull sur le frontend avant chaque soumission)
     git_enabled: bool = True

@@ -22,8 +22,13 @@ VENV := $(SNN_ROOT)/.venv
 include $(SNN_ROOT)/mk/python.mk
 BOOTSTRAP_PYTHON ?= $(DETECTED_PYTHON)
 
+PILOT_MAIN := $(SNN_ROOT)/scrip_grid_5000/pilot_grid/main.py
+PILOT_PYTHON := $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
+PILOT_WATCH_INTERVAL ?= 300
+
 .PHONY: help job-status setup setup-venv setup-g5k list-python-modules check-deps print-python interactive \
 	download-data download-cifar10 download-cifar10-dvs prepare-cifar10-dvs \
+	pilot-grid pilot-grid-watch grid-watch \
 	$(RESERVE_TARGETS) $(TRAIN_TARGETS) $(FRESH_TARGETS) reserve-all train-all
 
 help:
@@ -83,6 +88,12 @@ help:
 	@echo "  make job-status"
 	@echo "  cd spikformer && make logs"
 	@echo ""
+	@echo "Orchestrateur Grid5000 (local, scripts dans scrip_grid_5000/scrip_run/):"
+	@echo "  make pilot-grid              # une tournée"
+	@echo "  make pilot-grid-watch        # relance toutes les $(PILOT_WATCH_INTERVAL)s (Ctrl+C pour arrêter)"
+	@echo "  make grid-watch              # alias de pilot-grid-watch"
+	@echo "  make pilot-grid-watch PILOT_WATCH_INTERVAL=600"
+	@echo ""
 	@echo "Variables globales:"
 	@echo "  DATA_DIR=$(DATA_DIR)  DATASET=$(DATASET)"
 	@echo "  WALLTIME=$(WALLTIME)  INTERACTIVE_WALLTIME=$(INTERACTIVE_WALLTIME)"
@@ -92,6 +103,16 @@ help:
 
 job-status:
 	@oarstat -u $$USER 2>/dev/null || oarstat 2>/dev/null || echo "oarstat indisponible (hors Grid5000 ?)"
+
+# Orchestrateur pilot_grid : lancer depuis la racine du repo (machine locale).
+pilot-grid:
+	$(PILOT_PYTHON) $(PILOT_MAIN)
+
+pilot-grid-watch:
+	watch -n $(PILOT_WATCH_INTERVAL) "$(PILOT_PYTHON) $(PILOT_MAIN)"
+
+# Alias court pour la surveillance continue de l'orchestrateur.
+grid-watch: pilot-grid-watch
 
 # Réservation interactive GPU (frontale → shell sur nœud, puis make train-*)
 interactive:

@@ -79,14 +79,39 @@ git_branch: main
 
 
 
-## Ressources OAR : `gpu=1` ou `gpu=2` ?
+## Ressources OAR — tout centraliser dans `config.yaml`
 
-**Gardez** `gpu=1` et activez **les deux lignes** `# OAR_option` dans chaque `.sh` :
+**Recommandé** : régler file, type, GPU et walltime dans `pilot_grid/config.yaml` — **pas besoin
+de modifier les 9 scripts** dans `scrip_run/` ou `experiences/`.
 
-```bash
-# OAR_option -q default
-# OAR_option -l host=1/gpu=1
+```yaml
+sites:
+  - lille
+max_jobs_per_site: 2
+walltime: "10:00:00"
+oar_type: day              # day | night
+oar_queue: besteffort      # besteffort | default
+oar_resources: host=1/gpu=1
 ```
+
+| Champ | Rôle | Exemples |
+|-------|------|----------|
+| `oar_resources` | GPU / nœuds (`-l`) | `host=1/gpu=1` (1 GPU, mono-GPU) |
+| `oar_type` | Créneau horaire (`-t`) | `day`, `night` |
+| `oar_queue` | File OAR (`-q`) | `besteffort`, `default` |
+| `walltime` | Durée max du job | `"10:00:00"` |
+
+**Basculer besteffort ↔ default** : une seule ligne à changer :
+
+```yaml
+oar_queue: besteffort   # jour, préemptible
+# oar_queue: default    # nuit / prioritaire
+```
+
+Les lignes `# OAR_option` dans les scripts sont **optionnelles** (surcharge locale seulement
+si le champ config est vide).
+
+### GPU : `gpu=1` ou `gpu=2` ?
 
 
 | Configuration                    | Effet                                                                 |

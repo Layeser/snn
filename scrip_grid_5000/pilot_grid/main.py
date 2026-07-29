@@ -84,25 +84,52 @@ def extraire_options_oar(ssh_client, chemin_distant_script):
     return options
 
 
+def _pilot_site_depuis_script(chemin_local: str) -> str | None:
+    """Lit '# Pilot_site lille|lyon' dans un script d'experience."""
+    try:
+        with open(chemin_local, "r") as f:
+            for ligne in f:
+                ligne = ligne.strip()
+                if ligne.startswith("# Pilot_site"):
+                    parts = ligne.split()
+                    if len(parts) >= 2:
+                        return parts[1].lower()
+    except OSError:
+        pass
+    return None
+
+
+def _eligible_pour_site(chemin_local: str, site: str) -> bool:
+    """Un script sans Pilot_site est attribue au premier site de config.yaml."""
+    cible = _pilot_site_depuis_script(chemin_local)
+    if cible is None:
+        return site == CFG.sites[0]
+    return cible == site.lower()
+
+
 def generer_commande_soumission(ssh_client, chemin_distant_sh):
-    walltime_global = CFG.walltime
-    type_oar = CFG.oar_type
-    
     options_script = extraire_options_oar(ssh_client, chemin_distant_sh)
-    
-    if "-l" in options_script:
-        ressources = f"{options_script['-l']},walltime={walltime_global}"
-    else:
-        ressources = f"host=1,gpu=1,walltime={walltime_global}"
-        
-    arguments_oar = []
-    arguments_oar.append(f'-l "{ressources}"')
-    arguments_oar.append(f'-t "{type_oar}"')
-    
+
+    # Priorite : config.yaml > # OAR_option du script > valeurs par defaut.
+    base_l = CFG.oar_resources or options_script.get("-l", "host=1/gpu=1")
+    ressources = f"{base_l},walltime={CFG.walltime}"
+
+    arguments_oar = [f'-l "{ressources}"']
+
+    # -t du script (ex. exotic) prime sur oar_type du config (ex. night).
+    oar_type = options_script.get("-t") or CFG.oar_type
+    if oar_type:
+        arguments_oar.append(f'-t "{oar_type}"')
+
+    queue = CFG.oar_queue or options_script.get("-q")
+    if queue:
+        arguments_oar.append(f'-q "{queue}"')
+
     for flag, valeur in options_script.items():
-        if flag != "-l":  
-            arguments_oar.append(f'{flag} "{valeur}"')
-            
+        if flag in ("-l", "-q", "-t"):
+            continue
+        arguments_oar.append(f'{flag} "{valeur}"')
+
     options_string = " ".join(arguments_oar)
     script_start = CFG.remote_start_script_path()
     
@@ -144,11 +171,21 @@ def _migrer_etats_obsoletes(etats: dict) -> dict:
 
 
 def charger_tous_les_etats():
-    if os.path.exists(CFG.state_file):
-        with open(CFG.state_file, 'r') as f:
-            etats = json.load(f)
+    if not os.path.exists(CFG.state_file):
+        return {}
+    try:
+        with open(CFG.state_file, "r") as f:
+            contenu = f.read().strip()
+        if not contenu:
+            return {}
+        etats = json.loads(contenu)
+        if not isinstance(etats, dict):
+            print(f"[Orchestrateur] {CFG.state_file} invalide (pas un objet JSON) — reinitialise.")
+            return {}
         return _migrer_etats_obsoletes(etats)
-    return {}
+    except json.JSONDecodeError:
+        print(f"[Orchestrateur] {CFG.state_file} illisible — reinitialise (utilisez '{{}}').")
+        return {}
 
 def sauvegarder_etat_fichier(nom_fichier, etape, statut_oar, job_id, site, chemin_local, chemin_distant):
     tous_les_etats = charger_tous_les_etats()
@@ -290,11 +327,10 @@ def synchroniser_git(ssh_client):
     return True
 
 
-def etape1_association(ssh_client, site, nom_fichier, chemin_local, chemin_distant):
+def etape1_association(ssh_client, site, nom_fichier, chemin_local, chemin_distant, *, git_sync=True):
     print(f"--- ÉTAPE 1 : Transfert et Lancement de {nom_fichier} ---")
 
-    # Option A : on rafraichit le code du projet AVANT tout (avant le oarsub).
-    if not synchroniser_git(ssh_client):
+    if git_sync and not synchroniser_git(ssh_client):
         return None
 
     if not televerser_fichier(ssh_client, chemin_local, chemin_distant):
@@ -403,7 +439,7 @@ def archiver_script_local(nom_fichier, chemin_actuel):
 # 5. PILOTE DE RUN
 # =============================================================
 
-def piloter_un_script(ssh_client, site, nom_fichier, info):
+def piloter_un_script(ssh_client, site, nom_fichier, info, *, git_sync=True):
     """ Gère le cycle de vie d'un script spécifique sur un site précis """
     job_id = info["job_id"]
     etape = info["etape"]
@@ -413,7 +449,9 @@ def piloter_un_script(ssh_client, site, nom_fichier, info):
     print(f"\n[Pilote] Analyse de {nom_fichier} sur {site} (Étape : {etape})")
     
     if etape == "ETAPE_1":
-        etape1_association(ssh_client, site, nom_fichier, chemin_local, chemin_distant)
+        etape1_association(
+            ssh_client, site, nom_fichier, chemin_local, chemin_distant, git_sync=git_sync
+        )
         
     elif etape == "ETAPE_2":
         statut_flux = etape2_verification(ssh_client, job_id, nom_fichier, chemin_distant)
@@ -479,9 +517,13 @@ def main():
                 continue
                 
             try:
+                git_ok = synchroniser_git(ssh_client) if CFG.git_enabled else True
+                if not git_ok:
+                    print("[git] Sync echouee — suivi des jobs existants uniquement (pas de nouveaux lancements).")
+
                 # Mise à jour des scripts en cours sur ce site
                 for nom_fichier, info in scripts_du_site:
-                    piloter_un_script(ssh_client, site, nom_fichier, info)
+                    piloter_un_script(ssh_client, site, nom_fichier, info, git_sync=False)
                 
                 # On recharge les états (car des scripts ont pu passer en "TERMINE")
                 tous_les_etats = charger_tous_les_etats()
@@ -489,11 +531,25 @@ def main():
                 places_libres = CFG.max_jobs_per_site - nb_actifs
                 
                 # ACTION 2 : Si places libres, on attribue de nouveaux scripts de la racine
-                if places_libres > 0 and scripts_racine:
-                    print(f"[Orchestrateur] Il reste {places_libres} place(s) sur {site}. Attribution...")
+                scripts_eligibles = [
+                    s for s in scripts_racine if _eligible_pour_site(s, site)
+                ]
+                if places_libres > 0 and scripts_eligibles:
+                    if not git_ok:
+                        print(
+                            f"[Orchestrateur] {len(scripts_eligibles)} script(s) "
+                            f"eligible(s) pour {site} — git non synchronise."
+                        )
+                    else:
+                        print(
+                            f"[Orchestrateur] Il reste {places_libres} place(s) sur {site}. "
+                            f"Attribution ({len(scripts_eligibles)} eligible(s))..."
+                        )
                     
-                    for i in range(min(places_libres, len(scripts_racine))):
-                        script_a_attribuer = scripts_racine[i]
+                    for i in range(min(places_libres, len(scripts_eligibles))):
+                        if not git_ok:
+                            break
+                        script_a_attribuer = scripts_eligibles[i]
                         nom_f = os.path.basename(script_a_attribuer)
                         
                         # Déplacement physique vers le sous-dossier du site (ex: scrip_run/lille/)
@@ -512,7 +568,7 @@ def main():
                         
                         # Lancement immédiat du cycle de vie
                         info_initiale = obtenir_etat_specifique(nom_f)
-                        piloter_un_script(ssh_client, site, nom_f, info_initiale)
+                        piloter_un_script(ssh_client, site, nom_f, info_initiale, git_sync=False)
                         
             finally:
                 deconnecter_serveurs(bastion, ssh_client)

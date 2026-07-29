@@ -15,8 +15,7 @@
 #     (c'est ce dossier qui sera archive puis rapatrie en local)
 # =============================================================
 
-# ---- 1) Ressources OAR (adapter selon le besoin) ----
-# Decommenter les deux lignes ci-dessous pour la file default + 1 GPU par job.
+# ---- 1) Ressources OAR (optionnel — preferer pilot_grid/config.yaml) ----
 # OAR_option -q default
 # OAR_option -l host=1/gpu=1
 

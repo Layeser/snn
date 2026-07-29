@@ -1,8 +1,8 @@
 #!/bin/bash
 # CIFAR-10-DVS — LR fixe 1e-4, 1/3 train stratifié, diagnostic stabilité
 
-# OAR_option -q default
-# OAR_option -l host=1/gpu=1
+# Pilot_site lille
+# OAR_option -p chuc
 
 RUN_NAME="cifar10dvs_subset_lr1e-4"
 export OUTPUT_DIR="$HOME/internship/snn/HPSTAtten/save/$RUN_NAME"
@@ -15,5 +15,4 @@ python -m scripts.train \
     --lr 1e-4 \
     --train-fraction 0.333333 \
     --seed 42 \
-    --fresh \
     --save-dir "$OUTPUT_DIR"
