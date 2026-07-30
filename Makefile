@@ -33,6 +33,7 @@ PILOT_WATCH_INTERVAL ?= 300
 	pilot-grid pilot-grid-watch grid-watch \
 	prepare-pilot-smoke pilot-grid-smoke pilot-grid-smoke-watch pilot-smoke \
 	prepare-chicoree-smoke chicoree-smoke-test \
+	prepare-sirius-smoke sirius-smoke-test \
 	$(RESERVE_TARGETS) $(TRAIN_TARGETS) $(FRESH_TARGETS) reserve-all train-all
 
 help:
@@ -109,6 +110,10 @@ help:
 	@echo "  make prepare-chicoree-smoke  # 6 scripts dans chicoree_experiences/"
 	@echo "  make chicoree-smoke-test     # rappel des commandes flille"
 	@echo ""
+	@echo "Test file sirius / Lyon (smoke, day 20 min, 10 jobs → 8 GPU + queue) :"
+	@echo "  make prepare-sirius-smoke    # 10 scripts dans sirius_experiences/"
+	@echo "  make sirius-smoke-test       # rappel des commandes flyon"
+	@echo ""
 	@echo "Variables globales:"
 	@echo "  DATA_DIR=$(DATA_DIR)  DATASET=$(DATASET)"
 	@echo "  WALLTIME=$(WALLTIME)  INTERACTIVE_WALLTIME=$(INTERACTIVE_WALLTIME)"
@@ -142,24 +147,22 @@ prepare-chicoree-smoke:
 
 chicoree-smoke-test: prepare-chicoree-smoke
 	@echo ""
-	@echo "=== Réservation day 15 min (flille) — choisir UNE option ==="
+	@echo "=== chicorée / flille — day 15 min, 4 GPU ==="
+	@echo "   oarsub -I -p chicoree -t exotic -t day -l host=1/gpu=4,walltime=0:15:00 -q default"
+	@echo "   bash scrip_grid_5000/run_chicoree_queue.sh"
+	@echo "   Doc : Notes/gpureser.md"
 	@echo ""
-	@echo "A) Interactif (debug, recommandé pour le 1er test) :"
-	@echo "   oarsub -I -p chicoree -t exotic -t day \\"
-	@echo "     -l host=1/gpu=4,walltime=0:15:00 -q default"
-	@echo "   # sur le nœud :"
-	@echo "   cd ~/internship/snn && bash scrip_grid_5000/run_chicoree_queue.sh"
+
+prepare-sirius-smoke:
+	bash $(SNN_ROOT)/scrip_grid_5000/prepare_sirius_smoke.sh
+
+sirius-smoke-test: prepare-sirius-smoke
 	@echo ""
-	@echo "B) Batch (sleep + connexion) :"
-	@echo "   oarsub -p chicoree -t exotic -t day \\"
-	@echo "     -l host=1/gpu=4,walltime=0:15:00 -q default \\"
-	@echo "     -n chicoree_smoke_test -- /bin/sleep 999999"
-	@echo "   bash scrip_grid_5000/run_chicoree_queue.sh --job-id <JOB_ID>"
+	@echo "=== sirius / flyon — day 20 min, 8 GPU ==="
+	@echo "   oarsub -I -p sirius -t exotic -t day -l host=1/gpu=8,walltime=0:20:00 -q default"
+	@echo "   bash scrip_grid_5000/run_sirius_queue.sh"
+	@echo "   Doc : Notes/gpures_sirius.md"
 	@echo ""
-	@echo "Suivi pendant le test :"
-	@echo "   watch -n 3 nvidia-smi"
-	@echo "   tail -f outputs/chicoree_queue/scheduler.log"
-	@echo "   ls scrip_grid_5000/chicoree_experiences/archive/done/"
 
 # Alias court pour la surveillance continue de l'orchestrateur.
 grid-watch: pilot-grid-watch
