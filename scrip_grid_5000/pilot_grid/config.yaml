@@ -46,7 +46,7 @@ max_jobs_per_site: 4
 # --- Options OAR (prioritaires sur les scripts d'experience) ---
 # Modifier ICI pour basculer besteffort <-> default, day <-> night, etc.
 # sans toucher aux fichiers dans scrip_run/ ou experiences/.
-# -t exotic (chicoree/sirius) se met dans # OAR_option du script ; prime sur oar_type.
+# -t exotic (chicoree/sirius) + -t night dans les scripts ; les deux sont passes a oarsub.
 walltime: "10:00:00"
 oar_type: night
 oar_queue: default

@@ -71,17 +71,51 @@ def _parse_oar_option_line(ligne: str) -> tuple[str, str] | None:
 
 
 def extraire_options_oar(ssh_client, chemin_distant_script):
+    """Lit le script distant et extrait les options OAR (# OAR_option ...)."""
     options = {}
+    oar_types: list[str] = []
     try:
         stdin, stdout, stderr = ssh_client.exec_command(f"cat {chemin_distant_script}")
         for ligne in stdout:
             parsed = _parse_oar_option_line(ligne)
             if parsed:
                 flag, valeur = parsed
-                options[flag] = valeur
+                if flag == "-t":
+                    oar_types.append(valeur)
+                else:
+                    options[flag] = valeur
     except Exception as e:
         print(f"Erreur lors de la lecture distante des options OAR : {e}")
-    return options
+    return options, oar_types
+
+
+def generer_commande_soumission(ssh_client, chemin_distant_sh):
+    options_script, oar_types_script = extraire_options_oar(ssh_client, chemin_distant_sh)
+
+    # Priorite : config.yaml > # OAR_option du script > valeurs par defaut.
+    base_l = CFG.oar_resources or options_script.get("-l", "host=1/gpu=1")
+    ressources = f"{base_l},walltime={CFG.walltime}"
+
+    arguments_oar = [f'-l "{ressources}"']
+
+    # Plusieurs -t possibles (ex. exotic + night pour chicoree/sirius).
+    oar_types = oar_types_script or ([CFG.oar_type] if CFG.oar_type else [])
+    for oar_type in oar_types:
+        arguments_oar.append(f'-t "{oar_type}"')
+
+    queue = CFG.oar_queue or options_script.get("-q")
+    if queue:
+        arguments_oar.append(f'-q "{queue}"')
+
+    for flag, valeur in options_script.items():
+        if flag in ("-l", "-q"):
+            continue
+        arguments_oar.append(f'{flag} "{valeur}"')
+
+    options_string = " ".join(arguments_oar)
+    script_start = CFG.remote_start_script_path()
+
+    return f'oarsub {options_string} "{script_start} {chemin_distant_sh}"'
 
 
 def _pilot_site_depuis_script(chemin_local: str) -> str | None:
@@ -89,9 +123,9 @@ def _pilot_site_depuis_script(chemin_local: str) -> str | None:
     try:
         with open(chemin_local, "r") as f:
             for ligne in f:
-                ligne = ligne.strip()
-                if ligne.startswith("# Pilot_site"):
-                    parts = ligne.split()
+                contenu = ligne.strip().lstrip("#").strip()
+                if contenu.startswith("Pilot_site"):
+                    parts = contenu.split()
                     if len(parts) >= 2:
                         return parts[1].lower()
     except OSError:
@@ -105,35 +139,6 @@ def _eligible_pour_site(chemin_local: str, site: str) -> bool:
     if cible is None:
         return site == CFG.sites[0]
     return cible == site.lower()
-
-
-def generer_commande_soumission(ssh_client, chemin_distant_sh):
-    options_script = extraire_options_oar(ssh_client, chemin_distant_sh)
-
-    # Priorite : config.yaml > # OAR_option du script > valeurs par defaut.
-    base_l = CFG.oar_resources or options_script.get("-l", "host=1/gpu=1")
-    ressources = f"{base_l},walltime={CFG.walltime}"
-
-    arguments_oar = [f'-l "{ressources}"']
-
-    # -t du script (ex. exotic) prime sur oar_type du config (ex. night).
-    oar_type = options_script.get("-t") or CFG.oar_type
-    if oar_type:
-        arguments_oar.append(f'-t "{oar_type}"')
-
-    queue = CFG.oar_queue or options_script.get("-q")
-    if queue:
-        arguments_oar.append(f'-q "{queue}"')
-
-    for flag, valeur in options_script.items():
-        if flag in ("-l", "-q", "-t"):
-            continue
-        arguments_oar.append(f'{flag} "{valeur}"')
-
-    options_string = " ".join(arguments_oar)
-    script_start = CFG.remote_start_script_path()
-    
-    return f'oarsub {options_string} "{script_start} {chemin_distant_sh}"'
 
 
 # =============================================================

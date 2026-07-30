@@ -5,6 +5,7 @@
 # Pilot_site lille
 # OAR_option -p chicoree
 # OAR_option -t exotic
+# OAR_option -t night
 
 RUN_NAME="cifar10_grid_hp_linear_optuna_t27_200ep"
 export OUTPUT_DIR="$HOME/internship/snn/HPSTAtten/save/$RUN_NAME"
