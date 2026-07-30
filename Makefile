@@ -32,6 +32,7 @@ PILOT_WATCH_INTERVAL ?= 300
 	download-data download-cifar10 download-cifar10-dvs prepare-cifar10-dvs \
 	pilot-grid pilot-grid-watch grid-watch \
 	prepare-pilot-smoke pilot-grid-smoke pilot-grid-smoke-watch pilot-smoke \
+	prepare-chicoree-smoke chicoree-smoke-test \
 	$(RESERVE_TARGETS) $(TRAIN_TARGETS) $(FRESH_TARGETS) reserve-all train-all
 
 help:
@@ -104,6 +105,10 @@ help:
 	@echo "  make pilot-grid-smoke-watch  # suivre jusqu'à récupération"
 	@echo "  make pilot-smoke             # prepare-pilot-smoke + pilot-grid-smoke"
 	@echo ""
+	@echo "Test file chicorée (smoke, day 15 min, 6 jobs → 4 GPU + queue) :"
+	@echo "  make prepare-chicoree-smoke  # 6 scripts dans chicoree_experiences/"
+	@echo "  make chicoree-smoke-test     # rappel des commandes flille"
+	@echo ""
 	@echo "Variables globales:"
 	@echo "  DATA_DIR=$(DATA_DIR)  DATASET=$(DATASET)"
 	@echo "  WALLTIME=$(WALLTIME)  INTERACTIVE_WALLTIME=$(INTERACTIVE_WALLTIME)"
@@ -131,6 +136,30 @@ pilot-grid-smoke-watch:
 	watch -n $(PILOT_WATCH_INTERVAL) "PILOT_CONFIG=$(PILOT_CONFIG_SMOKE) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG_SMOKE)"
 
 pilot-smoke: prepare-pilot-smoke pilot-grid-smoke
+
+prepare-chicoree-smoke:
+	bash $(SNN_ROOT)/scrip_grid_5000/prepare_chicoree_smoke.sh
+
+chicoree-smoke-test: prepare-chicoree-smoke
+	@echo ""
+	@echo "=== Réservation day 15 min (flille) — choisir UNE option ==="
+	@echo ""
+	@echo "A) Interactif (debug, recommandé pour le 1er test) :"
+	@echo "   oarsub -I -p chicoree -t exotic -t day \\"
+	@echo "     -l host=1/gpu=4,walltime=0:15:00 -q default"
+	@echo "   # sur le nœud :"
+	@echo "   cd ~/internship/snn && bash scrip_grid_5000/run_chicoree_queue.sh"
+	@echo ""
+	@echo "B) Batch (sleep + connexion) :"
+	@echo "   oarsub -p chicoree -t exotic -t day \\"
+	@echo "     -l host=1/gpu=4,walltime=0:15:00 -q default \\"
+	@echo "     -n chicoree_smoke_test -- /bin/sleep 999999"
+	@echo "   bash scrip_grid_5000/run_chicoree_queue.sh --job-id <JOB_ID>"
+	@echo ""
+	@echo "Suivi pendant le test :"
+	@echo "   watch -n 3 nvidia-smi"
+	@echo "   tail -f outputs/chicoree_queue/scheduler.log"
+	@echo "   ls scrip_grid_5000/chicoree_experiences/archive/done/"
 
 # Alias court pour la surveillance continue de l'orchestrateur.
 grid-watch: pilot-grid-watch
