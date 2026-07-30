@@ -1,8 +1,8 @@
-# Smoke test — file jour + exotic pour chicoree/sirius (clusters non-default).
+# Defaults OAR pour les smoke tests (file jour, walltime court dans config_smoke.yaml).
 
 chicoree:
   max_jobs: 4
-  oar_types: [exotic, day]
+  oar_types: [day]
   oar_resources: host=1/gpu=1
 
 chuc:
@@ -12,5 +12,5 @@ chuc:
 
 sirius:
   max_jobs: 1
-  oar_types: [exotic, day]
+  oar_types: [day]
   oar_resources: host=1/gpu=1

@@ -1,10 +1,6 @@
 #!/bin/bash
-# Bundle Lille / chuc — 4 LR sweeps CIFAR-10-DVS en parallèle (1 GPU / expérience).
-# Réservation OAR : host=1/gpu=4, night.
+# Bundle Lille / chuc — 4 LR DVS en parallèle (1 nœud, 4 GPU).
 
-# Pilot_site lille
-# OAR_option -p chuc
-# OAR_option -t night
 # OAR_option -l host=1/gpu=4
 
 set -uo pipefail
@@ -13,8 +9,8 @@ RUN_NAME="bundle_lille_chuc_dvs4"
 export OUTPUT_DIR="${HOME}/internship/snn/HPSTAtten/save/${RUN_NAME}"
 mkdir -p "${OUTPUT_DIR}/logs"
 
-BUNDLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXP_ROOT="$(dirname "${BUNDLE_DIR}")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXP_ROOT="$(cd "${SCRIPT_DIR}/../../../experiences" && pwd)"
 
 echo "=== Bundle chuc : 4 LR DVS (parallèle) ==="
 echo "Logs : ${OUTPUT_DIR}/logs/"

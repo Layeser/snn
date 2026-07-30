@@ -12,7 +12,8 @@
 # Surcharge locale : # OAR_option dans le .sh
 #
 # Nouvelle expérience :
-#   cp experiences/cifar10/mon_run.sh scrip_run/lille/chicoree/
+#   Mode bundle (recommandé campagne) : prepare_campaign_queue.sh → 3 jobs
+#   Mode unitaire : cp experiences/cifar10/mon_run.sh scrip_run/lille/chicoree/
 #   make pilot-grid
 #
 # (Ce dossier est gitignored — lancez prepare_campaign_queue.sh pour la campagne courante.)

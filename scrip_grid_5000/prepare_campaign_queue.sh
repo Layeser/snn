@@ -1,39 +1,39 @@
 #!/bin/bash
-# Copie les expériences campagne actuelle dans scrip_run/<site>/<cluster>/.
-# Usage futur : cp scrip_grid_5000/experiences/cifar10/mon_run.sh scrip_run/lille/chicoree/
+# Campagne : 3 jobs OAR (1 bundle par cluster), parallélisme interne sur chicoree/chuc.
+#
+#   scrip_run/lille/chicoree/bundle_grid4.sh   → 4 grilles CIFAR-10 (gpu=4)
+#   scrip_run/lille/chuc/bundle_dvs4.sh        → 4 LR DVS (gpu=4)
+#   scrip_run/lyon/sirius/bundle_optuna.sh     → Optuna DVS (gpu=1)
+#
+# Alternative (9 jobs séparés) : copier les scripts individuels depuis experiences/.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 QUEUE="$ROOT/scrip_run"
 EXP="$ROOT/experiences"
 
-copy_exp() {
-    local site=$1 cluster=$2 rel_path=$3
+copy_bundle() {
+    local site=$1 cluster=$2 src_name=$3 dest_name=$4
     local dest_dir="${QUEUE}/${site}/${cluster}"
     mkdir -p "$dest_dir"
-    cp "${EXP}/${rel_path}" "${dest_dir}/$(basename "${rel_path}")"
-    chmod +x "${dest_dir}/$(basename "${rel_path}")"
-    echo "  -> scrip_run/${site}/${cluster}/$(basename "${rel_path}")"
+    rm -f "${dest_dir}"/*.sh
+    cp "${EXP}/bundles/${src_name}" "${dest_dir}/${dest_name}"
+    chmod +x "${dest_dir}/${dest_name}"
+    echo "  -> scrip_run/${site}/${cluster}/${dest_name}"
 }
 
-echo "=== File d'attente Lille / chicoree (4 grilles CIFAR-10) ==="
-copy_exp lille chicoree cifar10/grid_statten_optuna_t27_200ep.sh
-copy_exp lille chicoree cifar10/grid_hp_optuna_t27_200ep.sh
-copy_exp lille chicoree cifar10/grid_hp_linear_optuna_t27_200ep.sh
-copy_exp lille chicoree cifar10/grid_sdt_optuna_t27_200ep.sh
+echo "=== 1 job Lille / chicoree (4 expériences en parallèle, gpu=4) ==="
+copy_bundle lille chicoree lille_chicoree_grid4.sh bundle_grid4.sh
 
-echo "=== File d'attente Lille / chuc (4 LR DVS) ==="
-copy_exp lille chuc cifar10-dvs/subset_lr1e-4.sh
-copy_exp lille chuc cifar10-dvs/subset_lr1e-5.sh
-copy_exp lille chuc cifar10-dvs/subset_lr1e-6.sh
-copy_exp lille chuc cifar10-dvs/subset_lr1e-7.sh
+echo "=== 1 job Lille / chuc (4 LR DVS en parallèle, gpu=4) ==="
+copy_bundle lille chuc lille_chuc_dvs4.sh bundle_dvs4.sh
 
-echo "=== File d'attente Lyon / sirius (Optuna DVS) ==="
-copy_exp lyon sirius cifar10-dvs/subset_optuna_20x30.sh
+echo "=== 1 job Lyon / sirius (Optuna DVS, gpu=1) ==="
+copy_bundle lyon sirius lyon_sirius_optuna.sh bundle_optuna.sh
 
 echo ""
-echo "Structure : scrip_run/<site>/<cluster>/*.sh"
-echo "Options OAR par cluster : pilot_grid/cluster_defaults.yaml"
+echo "3 jobs OAR au total. Options par cluster : pilot_grid/cluster_defaults.yaml"
+echo "Bundles : # OAR_option -l host=1/gpu=4 sur chicoree et chuc"
 echo ""
 echo "  echo '{}' > scrip_grid_5000/pilot_grid/run_status.json"
 echo "  git push && make pilot-grid"

@@ -1,11 +1,7 @@
 #!/bin/bash
-# Bundle Lille / chicoree — 4 grilles CIFAR-10 en parallèle (1 GPU / expérience).
-# Réservation OAR : host=1/gpu=4, exotic + night.
+# Bundle Lille / chicoree — 4 grilles CIFAR-10 en parallèle (1 nœud, 4 GPU).
+# OAR : 1 job, host=1/gpu=4 (surcharge cluster_defaults via OAR_option ci-dessous).
 
-# Pilot_site lille
-# OAR_option -p chicoree
-# OAR_option -t exotic
-# OAR_option -t night
 # OAR_option -l host=1/gpu=4
 
 set -uo pipefail
@@ -14,12 +10,12 @@ RUN_NAME="bundle_lille_chicoree_grid4"
 export OUTPUT_DIR="${HOME}/internship/snn/HPSTAtten/save/${RUN_NAME}"
 mkdir -p "${OUTPUT_DIR}/logs"
 
-BUNDLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXP_ROOT="$(dirname "${BUNDLE_DIR}")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXP_ROOT="$(cd "${SCRIPT_DIR}/../../../experiences" && pwd)"
 
 echo "=== Bundle chicoree : 4 grilles CIFAR-10 (parallèle) ==="
 echo "Logs : ${OUTPUT_DIR}/logs/"
-echo "CUDA_VISIBLE_DEVICES (job) : ${CUDA_VISIBLE_DEVICES:-non défini}"
+echo "Experiences : ${EXP_ROOT}/cifar10/"
 
 pids=()
 fail=0
