@@ -1,10 +1,6 @@
 #!/bin/bash
 # CIFAR-10-DVS — Optuna AdamW + cosine, 20 essais × 30 epochs, 1/3 train stratifié
 
-# Pilot_site lyon
-# OAR_option -p sirius
-# OAR_option -t exotic
-# OAR_option -t night
 
 RUN_NAME="cifar10dvs_subset_optuna_20x30"
 export OUTPUT_DIR="$HOME/internship/snn/HPSTAtten/save/$RUN_NAME"

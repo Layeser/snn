@@ -23,12 +23,15 @@ include $(SNN_ROOT)/mk/python.mk
 BOOTSTRAP_PYTHON ?= $(DETECTED_PYTHON)
 
 PILOT_MAIN := $(SNN_ROOT)/scrip_grid_5000/pilot_grid/main.py
+PILOT_CONFIG ?= $(SNN_ROOT)/scrip_grid_5000/pilot_grid/config.yaml
+PILOT_CONFIG_SMOKE := $(SNN_ROOT)/scrip_grid_5000/pilot_grid/config_smoke.yaml
 PILOT_PYTHON := $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 PILOT_WATCH_INTERVAL ?= 300
 
 .PHONY: help job-status setup setup-venv setup-g5k list-python-modules check-deps print-python interactive \
 	download-data download-cifar10 download-cifar10-dvs prepare-cifar10-dvs \
 	pilot-grid pilot-grid-watch grid-watch \
+	prepare-pilot-smoke pilot-grid-smoke pilot-grid-smoke-watch pilot-smoke \
 	$(RESERVE_TARGETS) $(TRAIN_TARGETS) $(FRESH_TARGETS) reserve-all train-all
 
 help:
@@ -89,10 +92,17 @@ help:
 	@echo "  cd spikformer && make logs"
 	@echo ""
 	@echo "Orchestrateur Grid5000 (local, scripts dans scrip_grid_5000/scrip_run/):"
-	@echo "  make pilot-grid              # une tournée"
+	@echo "  make pilot-grid              # une tournée (config prod, nuit)"
 	@echo "  make pilot-grid-watch        # relance toutes les $(PILOT_WATCH_INTERVAL)s (Ctrl+C pour arrêter)"
 	@echo "  make grid-watch              # alias de pilot-grid-watch"
 	@echo "  make pilot-grid-watch PILOT_WATCH_INTERVAL=600"
+	@echo ""
+	@echo "Smoke test orchestrateur (jour, walltime 10 min, 2 epochs, petites données) :"
+	@echo "  make prepare-pilot-smoke     # 3 scripts test (Lille chicoree/chuc + Lyon sirius)"
+	@echo "  git push                     # configs smoke sur Grid5000"
+	@echo "  make pilot-grid-smoke        # soumet avec config_smoke.yaml"
+	@echo "  make pilot-grid-smoke-watch  # suivre jusqu'à récupération"
+	@echo "  make pilot-smoke             # prepare-pilot-smoke + pilot-grid-smoke"
 	@echo ""
 	@echo "Variables globales:"
 	@echo "  DATA_DIR=$(DATA_DIR)  DATASET=$(DATASET)"
@@ -106,10 +116,21 @@ job-status:
 
 # Orchestrateur pilot_grid : lancer depuis la racine du repo (machine locale).
 pilot-grid:
-	$(PILOT_PYTHON) $(PILOT_MAIN)
+	PILOT_CONFIG=$(PILOT_CONFIG) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG)
 
 pilot-grid-watch:
-	watch -n $(PILOT_WATCH_INTERVAL) "$(PILOT_PYTHON) $(PILOT_MAIN)"
+	watch -n $(PILOT_WATCH_INTERVAL) "PILOT_CONFIG=$(PILOT_CONFIG) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG)"
+
+prepare-pilot-smoke:
+	bash $(SNN_ROOT)/scrip_grid_5000/prepare_pilot_smoke.sh
+
+pilot-grid-smoke:
+	PILOT_CONFIG=$(PILOT_CONFIG_SMOKE) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG_SMOKE)
+
+pilot-grid-smoke-watch:
+	watch -n $(PILOT_WATCH_INTERVAL) "PILOT_CONFIG=$(PILOT_CONFIG_SMOKE) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG_SMOKE)"
+
+pilot-smoke: prepare-pilot-smoke pilot-grid-smoke
 
 # Alias court pour la surveillance continue de l'orchestrateur.
 grid-watch: pilot-grid-watch

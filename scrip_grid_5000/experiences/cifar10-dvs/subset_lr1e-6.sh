@@ -1,9 +1,6 @@
 #!/bin/bash
 # CIFAR-10-DVS — LR fixe 1e-6, 1/3 train stratifié, diagnostic stabilité
 
-# Pilot_site lille
-# OAR_option -p chuc
-# OAR_option -t night
 
 RUN_NAME="cifar10dvs_subset_lr1e-6"
 export OUTPUT_DIR="$HOME/internship/snn/HPSTAtten/save/$RUN_NAME"

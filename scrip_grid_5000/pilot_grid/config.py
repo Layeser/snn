@@ -30,6 +30,7 @@ class Config:
     # Orchestration
     sites: list = field(default_factory=lambda: ["lille"])
     max_jobs_per_site: int = 2
+    cluster_defaults_file: str = "cluster_defaults.yaml"
 
     # Options OAR par defaut (prioritaires sur les # OAR_option des scripts)
     walltime: str = "10:00:00"

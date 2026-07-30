@@ -1,0 +1,28 @@
+# Config orchestrateur — smoke test jour (~10 min walltime, 2 epochs).
+# Usage : make prepare-pilot-smoke && git push && make pilot-grid-smoke
+
+user: kasekou
+ssh_gateway: access.grid5000.fr
+
+remote_project_dir: internship/snn
+remote_start_script: scrip_grid_5000/start_run.sh
+
+local_scripts_root: scrip_grid_5000/scrip_run
+local_outputs_dir: outputs
+state_file: scrip_grid_5000/pilot_grid/run_status.json
+
+sites:
+  - lille
+  - lyon
+max_jobs_per_site: 8
+
+cluster_defaults_file: cluster_defaults_smoke.yaml
+
+walltime: "0:10:00"
+oar_type: day
+oar_queue: default
+oar_resources: host=1/gpu=1
+
+git_enabled: true
+git_branch: main
+git_repo: "git@github.com:Layeser/snn.git"

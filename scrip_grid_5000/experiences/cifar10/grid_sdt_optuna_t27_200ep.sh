@@ -2,10 +2,6 @@
 # CIFAR-10 — grille 2×2 : SDT pur (sdt + binaire)
 # Hyperparamètres Optuna trial #27 @ 200 epochs, seed=42
 
-# Pilot_site lille
-# OAR_option -p chicoree
-# OAR_option -t exotic
-# OAR_option -t night
 
 RUN_NAME="cifar10_grid_sdt_optuna_t27_200ep"
 export OUTPUT_DIR="$HOME/internship/snn/HPSTAtten/save/$RUN_NAME"

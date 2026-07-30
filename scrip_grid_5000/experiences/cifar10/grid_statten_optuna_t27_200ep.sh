@@ -2,10 +2,6 @@
 # CIFAR-10 — grille 2×2 : STAtten (factorized + binaire)
 # Hyperparamètres Optuna trial #27 @ 200 epochs, seed=42
 
-# Pilot_site lille
-# OAR_option -p chicoree
-# OAR_option -t exotic
-# OAR_option -t night
 
 RUN_NAME="cifar10_grid_statten_optuna_t27_200ep"
 export OUTPUT_DIR="$HOME/internship/snn/HPSTAtten/save/$RUN_NAME"

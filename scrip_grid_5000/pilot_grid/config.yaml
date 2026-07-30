@@ -36,12 +36,13 @@ local_outputs_dir: outputs
 state_file: scrip_grid_5000/pilot_grid/run_status.json
 
 # --- Orchestration --------------------------------------------
-# Sites Grid'5000 cibles (ex: [lille, lyon, nantes]).
+# Sites Grid'5000. File d'attente : scrip_run/<site>/<cluster>/*.sh
 sites:
   - lille
   - lyon
-# Nombre max de jobs simultanes par site (chuc/chicoree partagent le plafond Lille).
-max_jobs_per_site: 4
+# Plafond global par site (info). Par cluster : cluster_defaults.yaml
+max_jobs_per_site: 8
+cluster_defaults_file: cluster_defaults.yaml
 
 # --- Options OAR (prioritaires sur les scripts d'experience) ---
 # Modifier ICI pour basculer besteffort <-> default, day <-> night, etc.

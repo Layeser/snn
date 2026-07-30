@@ -6,12 +6,18 @@ import shutil
 import glob
 import argparse
 import paramiko
+import yaml
+from pathlib import Path
 from ssh_utils import *
 from config import load_config
 
 # La configuration (specifique a la personne / installation) est chargee au
 # demarrage dans main() puis exposee via cette variable de module.
 CFG = None
+CLUSTER_DEFAULTS = {}
+
+ETAPES_ACTIVES = ("ETAPE_1", "ETAPE_2", "ETAPE_3")
+PILOT_GRID_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Ligne imprimee par start_run.sh a la fin d'un run reussi. Doit rester
 # STRICTEMENT identique a celle de scrip_grid_5000/start_run.sh.
@@ -89,17 +95,79 @@ def extraire_options_oar(ssh_client, chemin_distant_script):
     return options, oar_types
 
 
-def generer_commande_soumission(ssh_client, chemin_distant_sh):
-    options_script, oar_types_script = extraire_options_oar(ssh_client, chemin_distant_sh)
+def load_cluster_defaults() -> dict:
+    rel = getattr(CFG, "cluster_defaults_file", None) or "cluster_defaults.yaml"
+    chemin = rel if os.path.isabs(rel) else os.path.join(PILOT_GRID_DIR, rel)
+    if not os.path.exists(chemin):
+        return {}
+    with open(chemin, "r") as f:
+        return yaml.safe_load(f) or {}
 
-    # Priorite : config.yaml > # OAR_option du script > valeurs par defaut.
-    base_l = CFG.oar_resources or options_script.get("-l", "host=1/gpu=1")
+
+def _scripts_root_abs() -> str:
+    return os.path.normpath(CFG.local_scripts_root)
+
+
+def meta_script(chemin_local: str) -> tuple[str, str, str, str] | None:
+    """Retourne (rel_key, site, cluster, basename) pour scrip_run/<site>/<cluster>/x.sh."""
+    try:
+        rel = os.path.relpath(os.path.normpath(chemin_local), _scripts_root_abs())
+    except ValueError:
+        return None
+    parts = Path(rel).parts
+    if len(parts) < 3:
+        return None
+    site, cluster, nom = parts[0], parts[1], parts[-1]
+    if not nom.endswith(".sh"):
+        return None
+    rel_key = f"{site}/{cluster}/{nom}"
+    return rel_key, site, cluster, nom
+
+
+def decouvrir_scripts_en_attente(site: str, etats: dict) -> list[tuple[str, str, str, str]]:
+    """Scripts dans scrip_run/<site>/<cluster>/*.sh pas encore TERMINE."""
+    resultat = []
+    site_dir = os.path.join(_scripts_root_abs(), site)
+    if not os.path.isdir(site_dir):
+        return resultat
+
+    for cluster in sorted(os.listdir(site_dir)):
+        if cluster in ("archive",):
+            continue
+        cluster_dir = os.path.join(site_dir, cluster)
+        if not os.path.isdir(cluster_dir):
+            continue
+        for chemin in sorted(glob.glob(os.path.join(cluster_dir, "*.sh"))):
+            meta = meta_script(chemin)
+            if not meta:
+                continue
+            rel_key, site_lu, cluster_lu, nom = meta
+            if site_lu != site:
+                continue
+            info = etats.get(rel_key, {})
+            if info.get("etape") == "TERMINE":
+                continue
+            if info.get("etape") in ETAPES_ACTIVES:
+                continue
+            resultat.append((rel_key, chemin, cluster_lu, nom))
+    return resultat
+
+
+def generer_commande_soumission(ssh_client, chemin_distant_sh, cluster: str | None = None):
+    options_script, oar_types_script = extraire_options_oar(ssh_client, chemin_distant_sh)
+    defaults = CLUSTER_DEFAULTS.get(cluster or {}, {})
+
+    base_l = (
+        options_script.get("-l")
+        or defaults.get("oar_resources")
+        or CFG.oar_resources
+        or "host=1/gpu=1"
+    )
     ressources = f"{base_l},walltime={CFG.walltime}"
 
     arguments_oar = [f'-l "{ressources}"']
 
-    # Plusieurs -t possibles (ex. exotic + night pour chicoree/sirius).
-    oar_types = oar_types_script or ([CFG.oar_type] if CFG.oar_type else [])
+    oar_types = oar_types_script or defaults.get("oar_types") or ([CFG.oar_type] if CFG.oar_type else [])
     for oar_type in oar_types:
         arguments_oar.append(f'-t "{oar_type}"')
 
@@ -107,8 +175,12 @@ def generer_commande_soumission(ssh_client, chemin_distant_sh):
     if queue:
         arguments_oar.append(f'-q "{queue}"')
 
+    cluster_oar = options_script.get("-p") or cluster
+    if cluster_oar:
+        arguments_oar.append(f'-p "{cluster_oar}"')
+
     for flag, valeur in options_script.items():
-        if flag in ("-l", "-q"):
+        if flag in ("-l", "-q", "-p"):
             continue
         arguments_oar.append(f'{flag} "{valeur}"')
 
@@ -116,29 +188,6 @@ def generer_commande_soumission(ssh_client, chemin_distant_sh):
     script_start = CFG.remote_start_script_path()
 
     return f'oarsub {options_string} "{script_start} {chemin_distant_sh}"'
-
-
-def _pilot_site_depuis_script(chemin_local: str) -> str | None:
-    """Lit '# Pilot_site lille|lyon' dans un script d'experience."""
-    try:
-        with open(chemin_local, "r") as f:
-            for ligne in f:
-                contenu = ligne.strip().lstrip("#").strip()
-                if contenu.startswith("Pilot_site"):
-                    parts = contenu.split()
-                    if len(parts) >= 2:
-                        return parts[1].lower()
-    except OSError:
-        pass
-    return None
-
-
-def _eligible_pour_site(chemin_local: str, site: str) -> bool:
-    """Un script sans Pilot_site est attribue au premier site de config.yaml."""
-    cible = _pilot_site_depuis_script(chemin_local)
-    if cible is None:
-        return site == CFG.sites[0]
-    return cible == site.lower()
 
 
 # =============================================================
@@ -192,13 +241,14 @@ def charger_tous_les_etats():
         print(f"[Orchestrateur] {CFG.state_file} illisible — reinitialise (utilisez '{{}}').")
         return {}
 
-def sauvegarder_etat_fichier(nom_fichier, etape, statut_oar, job_id, site, chemin_local, chemin_distant):
+def sauvegarder_etat_fichier(rel_key, etape, statut_oar, job_id, site, cluster, chemin_local, chemin_distant):
     tous_les_etats = charger_tous_les_etats()
-    tous_les_etats[nom_fichier] = {
+    tous_les_etats[rel_key] = {
         "etape": etape,
         "statut_oar": statut_oar,
         "job_id": job_id,
         "site": site,
+        "cluster": cluster,
         "chemin_local": chemin_local,
         "chemin_distant": chemin_distant,
         "derniere_verification": time.strftime("%Y-%m-%d %H:%M:%S")
@@ -208,16 +258,37 @@ def sauvegarder_etat_fichier(nom_fichier, etape, statut_oar, job_id, site, chemi
         json.dump(tous_les_etats, f, indent=4)
 
 
-def obtenir_etat_specifique(nom_fichier):
+def obtenir_etat_specifique(rel_key):
     tous_les_etats = charger_tous_les_etats()
-    if nom_fichier in tous_les_etats:
-        return tous_les_etats[nom_fichier]
-    return {"etape": "AUCUNE", "statut_oar": "AUCUN", "job_id": None, "site": None, "chemin_local": None, "chemin_distant": None}
+    if rel_key in tous_les_etats:
+        return tous_les_etats[rel_key]
+    return {
+        "etape": "AUCUNE",
+        "statut_oar": "AUCUN",
+        "job_id": None,
+        "site": None,
+        "cluster": None,
+        "chemin_local": None,
+        "chemin_distant": None,
+    }
 
 
 def decompte_jobs_actifs_site(tous_les_etats, site):
-    """ Compte combien de scripts sont actuellement en cours sur un site donné """
-    return sum(1 for info in tous_les_etats.values() if info.get("site") == site and info.get("etape") in ["ETAPE_1", "ETAPE_2", "ETAPE_3"])
+    return sum(
+        1
+        for info in tous_les_etats.values()
+        if info.get("site") == site and info.get("etape") in ETAPES_ACTIVES
+    )
+
+
+def decompte_jobs_actifs_cluster(tous_les_etats, site, cluster):
+    return sum(
+        1
+        for info in tous_les_etats.values()
+        if info.get("site") == site
+        and info.get("cluster") == cluster
+        and info.get("etape") in ETAPES_ACTIVES
+    )
 
 
 # =============================================================
@@ -332,8 +403,8 @@ def synchroniser_git(ssh_client):
     return True
 
 
-def etape1_association(ssh_client, site, nom_fichier, chemin_local, chemin_distant, *, git_sync=True):
-    print(f"--- ÉTAPE 1 : Transfert et Lancement de {nom_fichier} ---")
+def etape1_association(ssh_client, site, cluster, rel_key, chemin_local, chemin_distant, *, git_sync=True):
+    print(f"--- ÉTAPE 1 : Transfert et Lancement de {rel_key} ---")
 
     if git_sync and not synchroniser_git(ssh_client):
         return None
@@ -351,26 +422,37 @@ def etape1_association(ssh_client, site, nom_fichier, chemin_local, chemin_dista
         return None
 
     ssh_client.exec_command(f"mkdir -p {chemin_distant_out}")
-    commande_oar = generer_commande_soumission(ssh_client, chemin_distant)
+    commande_oar = generer_commande_soumission(ssh_client, chemin_distant, cluster)
     commande_totale = f"cd {chemin_distant_out} && {commande_oar}"
 
     job_id = make_job(ssh_client, commande_totale, site)
     if not job_id:
         return None
 
-    sauvegarder_etat_fichier(nom_fichier, "ETAPE_2", "Lancement", job_id, site, chemin_local, chemin_distant)
+    sauvegarder_etat_fichier(
+        rel_key, "ETAPE_2", "Lancement", job_id, site, cluster, chemin_local, chemin_distant
+    )
     return job_id
 
 
-def etape2_verification(ssh_client, job_id, nom_fichier, chemin_distant):
-    print(f"--- ÉTAPE 2 : Vérification du Statut pour {nom_fichier} ---")
-    info = obtenir_etat_specifique(nom_fichier)
+def etape2_verification(ssh_client, job_id, rel_key, chemin_distant):
+    print(f"--- ÉTAPE 2 : Vérification du Statut pour {rel_key} ---")
+    info = obtenir_etat_specifique(rel_key)
     
     statut = obtenir_statut_oar(ssh_client, CFG.user, job_id)
     print(f"Statut OAR actuel : {statut}")
     
     if statut in ["R", "W", "F"]:
-        sauvegarder_etat_fichier(nom_fichier, "ETAPE_2", statut, job_id, info["site"], info["chemin_local"], chemin_distant)
+        sauvegarder_etat_fichier(
+            rel_key,
+            "ETAPE_2",
+            statut,
+            job_id,
+            info["site"],
+            info.get("cluster"),
+            info["chemin_local"],
+            chemin_distant,
+        )
         return "EN_COURS"
         
     elif statut == "ABSENT":
@@ -378,19 +460,28 @@ def etape2_verification(ssh_client, job_id, nom_fichier, chemin_distant):
         resultat_job = verifier_si_travail_fini(ssh_client, job_id, chemin_distant_out)
         
         if resultat_job == "FINI":
-            sauvegarder_etat_fichier(nom_fichier, "ETAPE_3", "FINI", None, info["site"], info["chemin_local"], chemin_distant)
+            sauvegarder_etat_fichier(
+                rel_key, "ETAPE_3", "FINI", None, info["site"], info.get("cluster"),
+                info["chemin_local"], chemin_distant,
+            )
             return "FINI"
         elif resultat_job == "KILLED":
-            sauvegarder_etat_fichier(nom_fichier, "ETAPE_2", "KILLED", None, info["site"], info["chemin_local"], chemin_distant)
+            sauvegarder_etat_fichier(
+                rel_key, "ETAPE_2", "KILLED", None, info["site"], info.get("cluster"),
+                info["chemin_local"], chemin_distant,
+            )
             return "KILLED"
         else:
-            sauvegarder_etat_fichier(nom_fichier, "ETAPE_3", "ERREUR", None, info["site"], info["chemin_local"], chemin_distant)
+            sauvegarder_etat_fichier(
+                rel_key, "ETAPE_3", "ERREUR", None, info["site"], info.get("cluster"),
+                info["chemin_local"], chemin_distant,
+            )
             return "ERREUR"
 
 
-def etape3_recuperation(ssh_client, job_id, nom_fichier, chemin_distant, statut_flux="FINI"):
-    print(f"--- ÉTAPE 3 : Récupération des résultats de {nom_fichier} ---")
-    info = obtenir_etat_specifique(nom_fichier)
+def etape3_recuperation(ssh_client, job_id, rel_key, chemin_distant, statut_flux="FINI"):
+    print(f"--- ÉTAPE 3 : Récupération des résultats de {rel_key} ---")
+    info = obtenir_etat_specifique(rel_key)
     
     chemin_distant_out, run_name = trouver_chemin_output_distant(ssh_client, chemin_distant)
     if not chemin_distant_out or not run_name:
@@ -420,64 +511,72 @@ def etape3_recuperation(ssh_client, job_id, nom_fichier, chemin_distant, statut_
             ssh_client.exec_command(f"rm -rf {chemin_distant_out}")
             ssh_client.exec_command(f"rm -f {archive_distante}")
             
-        sauvegarder_etat_fichier(nom_fichier, "TERMINE", statut_flux, None, info["site"], info["chemin_local"], chemin_distant)
+        sauvegarder_etat_fichier(
+            rel_key, "TERMINE", statut_flux, None, info["site"], info.get("cluster"),
+            info["chemin_local"], chemin_distant,
+        )
         return True
     except Exception as e:
         print(f"Erreur lors de la récupération : {e}")
         return False
 
 
-def archiver_script_local(nom_fichier, chemin_actuel):
-    """ Déplace physiquement le script exécuté dans le dossier 'archive' """
-    dossier_archive = f"{CFG.local_scripts_root}/archive"
-    os.makedirs(dossier_archive, exist_ok=True)
-    chemin_dest = f"{dossier_archive}/{nom_fichier}"
-    
+def archiver_script_local(rel_key, chemin_actuel):
+    """Déplace le script exécuté dans scrip_run/archive/<site>/<cluster>/"""
+    chemin_dest = os.path.join(_scripts_root_abs(), "archive", rel_key)
+    os.makedirs(os.path.dirname(chemin_dest), exist_ok=True)
+
     if os.path.exists(chemin_actuel):
         shutil.move(chemin_actuel, chemin_dest)
-        print(f"[Orchestrateur] Fichier script déplacé dans l'archive : {chemin_dest}")
-        info = obtenir_etat_specifique(nom_fichier)
-        sauvegarder_etat_fichier(nom_fichier, "TERMINE", info["statut_oar"], None, info["site"], chemin_dest, info["chemin_distant"])
+        print(f"[Orchestrateur] Script archivé : {chemin_actuel} -> {chemin_dest}")
+        info = obtenir_etat_specifique(rel_key)
+        sauvegarder_etat_fichier(
+            rel_key, "TERMINE", info["statut_oar"], None, info["site"], info.get("cluster"),
+            chemin_dest, info["chemin_distant"],
+        )
 
 
 # =============================================================
 # 5. PILOTE DE RUN
 # =============================================================
 
-def piloter_un_script(ssh_client, site, nom_fichier, info, *, git_sync=True):
-    """ Gère le cycle de vie d'un script spécifique sur un site précis """
+def piloter_un_script(ssh_client, site, rel_key, info, *, git_sync=True):
+    """Gère le cycle de vie d'un script (clé scrip_run/<site>/<cluster>/x.sh)."""
     job_id = info["job_id"]
     etape = info["etape"]
     chemin_local = info["chemin_local"]
     chemin_distant = info["chemin_distant"]
+    cluster = info.get("cluster") or (meta_script(chemin_local) or (None, None, None, None))[2]
     
-    print(f"\n[Pilote] Analyse de {nom_fichier} sur {site} (Étape : {etape})")
+    print(f"\n[Pilote] Analyse de {rel_key} sur {site}/{cluster} (Étape : {etape})")
     
     if etape == "ETAPE_1":
         etape1_association(
-            ssh_client, site, nom_fichier, chemin_local, chemin_distant, git_sync=git_sync
+            ssh_client, site, cluster, rel_key, chemin_local, chemin_distant, git_sync=git_sync
         )
         
     elif etape == "ETAPE_2":
-        statut_flux = etape2_verification(ssh_client, job_id, nom_fichier, chemin_distant)
+        statut_flux = etape2_verification(ssh_client, job_id, rel_key, chemin_distant)
         
         if statut_flux in ["FINI", "ERREUR"]:
-            if etape3_recuperation(ssh_client, job_id, nom_fichier, chemin_distant, statut_flux):
-                archiver_script_local(nom_fichier, chemin_local)
+            if etape3_recuperation(ssh_client, job_id, rel_key, chemin_distant, statut_flux):
+                archiver_script_local(rel_key, chemin_local)
                 
         elif statut_flux == "KILLED":
-            # Relancement automatique (Walltime dépassé)
             chemin_distant_out, _ = trouver_chemin_output_distant(ssh_client, chemin_distant)
             ssh_client.exec_command(f"mkdir -p {chemin_distant_out}")
-            commande_totale = f"cd {chemin_distant_out} && {generer_commande_soumission(ssh_client, chemin_distant)}"
+            commande_totale = f"cd {chemin_distant_out} && {generer_commande_soumission(ssh_client, chemin_distant, cluster)}"
             
             nouveau_job_id = make_job(ssh_client, commande_totale, site)
             if nouveau_job_id:
-                sauvegarder_etat_fichier(nom_fichier, "ETAPE_2", "Lancement", nouveau_job_id, site, chemin_local, chemin_distant)
+                sauvegarder_etat_fichier(
+                    rel_key, "ETAPE_2", "Lancement", nouveau_job_id, site, cluster,
+                    chemin_local, chemin_distant,
+                )
 
     elif etape == "ETAPE_3":
-        if etape3_recuperation(ssh_client, job_id, nom_fichier, chemin_distant, info.get("statut_oar", "FINI")):
-            archiver_script_local(nom_fichier, chemin_local)
+        if etape3_recuperation(ssh_client, job_id, rel_key, chemin_distant, info.get("statut_oar", "FINI")):
+            archiver_script_local(rel_key, chemin_local)
 
 
 # =============================================================
@@ -495,88 +594,68 @@ def main():
     )
     args = parser.parse_args()
     CFG = load_config(args.config)
+    global CLUSTER_DEFAULTS
+    CLUSTER_DEFAULTS = load_cluster_defaults()
 
     print("=======================================================")
     print("LANCEMENT DE LA TOURNÉE DE L'ORCHESTRATEUR GRID'5000")
     print(f"Utilisateur : {CFG.user} | Sites : {CFG.sites}")
+    print(f"File d'attente : {CFG.local_scripts_root}/<site>/<cluster>/*.sh")
     print("=======================================================")
     
     tous_les_etats = charger_tous_les_etats()
     
     for site in CFG.sites:
-        # Trouver les scripts liés à ce site qui tournent ou attendent d'être récupérés
-        scripts_du_site = [(nom, info) for nom, info in tous_les_etats.items() if info.get("site") == site and info.get("etape") != "TERMINE"]
-        
-        # Compter les jobs actifs
+        scripts_actifs = [
+            (cle, info)
+            for cle, info in tous_les_etats.items()
+            if info.get("site") == site and info.get("etape") != "TERMINE"
+        ]
+        scripts_en_attente = decouvrir_scripts_en_attente(site, tous_les_etats)
         nb_actifs = decompte_jobs_actifs_site(tous_les_etats, site)
-        places_libres = CFG.max_jobs_per_site - nb_actifs
-        
-        # Chercher s'il y a des scripts orphelins à la racine du dossier local
-        scripts_racine = [f for f in glob.glob(f"{CFG.local_scripts_root}/*.sh") if os.path.isfile(f)]
-        
-        # On ne se connecte à un serveur QUE s'il y a des fichiers à checker OU s'il y a de la place pour lancer
-        if scripts_du_site or (places_libres > 0 and scripts_racine):
-            print(f"\n>>> Connexion au site : {site.upper()} (Jobs actifs : {nb_actifs}/{CFG.max_jobs_per_site})")
-            bastion, ssh_client = connecter_serveur_final(CFG.user, site, CFG.ssh_gateway)
-            if not ssh_client:
-                continue
-                
-            try:
-                git_ok = synchroniser_git(ssh_client) if CFG.git_enabled else True
-                if not git_ok:
-                    print("[git] Sync echouee — suivi des jobs existants uniquement (pas de nouveaux lancements).")
 
-                # Mise à jour des scripts en cours sur ce site
-                for nom_fichier, info in scripts_du_site:
-                    piloter_un_script(ssh_client, site, nom_fichier, info, git_sync=False)
+        if not scripts_actifs and not scripts_en_attente:
+            continue
+
+        nb_soumis = sum(
+            1 for _, info in scripts_actifs if info.get("job_id") is not None
+        )
+        print(
+            f"\n>>> Connexion au site : {site.upper()} "
+            f"(suivis {nb_actifs}, soumis OAR {nb_soumis}, "
+            f"a soumettre {len(scripts_en_attente)})"
+        )
+        bastion, ssh_client = connecter_serveur_final(CFG.user, site, CFG.ssh_gateway)
+        if not ssh_client:
+            continue
                 
-                # On recharge les états (car des scripts ont pu passer en "TERMINE")
-                tous_les_etats = charger_tous_les_etats()
-                nb_actifs = decompte_jobs_actifs_site(tous_les_etats, site)
-                places_libres = CFG.max_jobs_per_site - nb_actifs
-                
-                # ACTION 2 : Si places libres, on attribue de nouveaux scripts de la racine
-                scripts_eligibles = [
-                    s for s in scripts_racine if _eligible_pour_site(s, site)
-                ]
-                if places_libres > 0 and scripts_eligibles:
-                    if not git_ok:
-                        print(
-                            f"[Orchestrateur] {len(scripts_eligibles)} script(s) "
-                            f"eligible(s) pour {site} — git non synchronise."
-                        )
-                    else:
-                        print(
-                            f"[Orchestrateur] Il reste {places_libres} place(s) sur {site}. "
-                            f"Attribution ({len(scripts_eligibles)} eligible(s))..."
-                        )
-                    
-                    for i in range(min(places_libres, len(scripts_eligibles))):
-                        if not git_ok:
-                            break
-                        script_a_attribuer = scripts_eligibles[i]
-                        nom_f = os.path.basename(script_a_attribuer)
+        try:
+            git_ok = synchroniser_git(ssh_client) if CFG.git_enabled else True
+            if not git_ok:
+                print("[git] Sync echouee — suivi des jobs existants uniquement.")
+
+            for rel_key, info in scripts_actifs:
+                piloter_un_script(ssh_client, site, rel_key, info, git_sync=False)
+
+            tous_les_etats = charger_tous_les_etats()
+
+            if git_ok and scripts_en_attente:
+                print(
+                    f"[Orchestrateur] Soumission de {len(scripts_en_attente)} script(s) "
+                    f"sur {site} — OAR exécute (R) ou met en file (W) selon les GPU."
+                )
+                for rel_key, chemin_local, cluster, _nom in scripts_en_attente:
+                    chemin_distant = CFG.remote_script_path(chemin_local)
+                    print(f"[Orchestrateur] oarsub {rel_key} (cluster {cluster})")
+                    sauvegarder_etat_fichier(
+                        rel_key, "ETAPE_1", "AUCUN", None, site, cluster,
+                        chemin_local, chemin_distant,
+                    )
+                    info_init = obtenir_etat_specifique(rel_key)
+                    piloter_un_script(ssh_client, site, rel_key, info_init, git_sync=False)
                         
-                        # Déplacement physique vers le sous-dossier du site (ex: scrip_run/lille/)
-                        dossier_site_local = f"{CFG.local_scripts_root}/{site}"
-                        os.makedirs(dossier_site_local, exist_ok=True)
-                        nouveau_chemin_local = f"{dossier_site_local}/{nom_f}"
-                        shutil.move(script_a_attribuer, nouveau_chemin_local)
-                        
-                        # Chemin distant correspondant au sous-dossier du site (miroir du local)
-                        chemin_distant_site = CFG.remote_script_path(f"{dossier_site_local}/{nom_f}")
-                        
-                        print(f" -> Déplacement local : {script_a_attribuer} -> {nouveau_chemin_local}")
-                        
-                        # Initialisation de l'état dans le JSON
-                        sauvegarder_etat_fichier(nom_f, "ETAPE_1", "AUCUN", None, site, nouveau_chemin_local, chemin_distant_site)
-                        
-                        # Lancement immédiat du cycle de vie
-                        info_initiale = obtenir_etat_specifique(nom_f)
-                        piloter_un_script(ssh_client, site, nom_f, info_initiale, git_sync=False)
-                        
-            finally:
-                deconnecter_serveurs(bastion, ssh_client)
+        finally:
+            deconnecter_serveurs(bastion, ssh_client)
                 
     print("\n=======================================================")
     print("FIN DE LA TOURNÉE DE L'ORCHESTRATEUR")

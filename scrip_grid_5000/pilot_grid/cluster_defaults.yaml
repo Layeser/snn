@@ -1,0 +1,25 @@
+# Options OAR par cluster Grid'5000 (nom du sous-dossier dans scrip_run/<site>/).
+# Surchargeables par # OAR_option dans chaque script d'experience.
+#
+# max_jobs : capacité GPU utile du cluster (info). Tous les scripts sont soumis
+# via oarsub ; OAR exécute jusqu'à cette limite et met le reste en attente (W).
+
+chicoree:
+  max_jobs: 4
+  oar_types: [exotic, night]
+  oar_resources: host=1/gpu=1
+
+chuc:
+  max_jobs: 4
+  oar_types: [night]
+  oar_resources: host=1/gpu=1
+
+sirius:
+  max_jobs: 1
+  oar_types: [exotic, night]
+  oar_resources: host=1/gpu=1
+
+gemini:
+  max_jobs: 2
+  oar_types: [exotic, night]
+  oar_resources: host=1/gpu=1
