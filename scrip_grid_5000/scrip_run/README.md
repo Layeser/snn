@@ -1,19 +1,21 @@
-# File d'attente Grid'5000 — déposez vos scripts ici
-#
-#   scrip_run/
-#     lille/
-#       chicoree/    ← 1 script = 1 job OAR (tous soumis ; OAR file si saturé)
-#       chuc/
-#     lyon/
-#       sirius/
-#
-# Le nom du sous-dossier = cluster OAR (-p chicoree, chuc, sirius…).
-# Options par cluster : pilot_grid/cluster_defaults.yaml
-# Surcharge locale : # OAR_option dans le .sh
-#
-# Nouvelle expérience :
-#   Mode bundle (recommandé campagne) : prepare_campaign_queue.sh → 3 jobs
-#   Mode unitaire : cp experiences/cifar10/mon_run.sh scrip_run/lille/chicoree/
-#   make pilot-grid
-#
-# (Ce dossier est gitignored — lancez prepare_campaign_queue.sh pour la campagne courante.)
+# File d'attente — mode **auto** (`make g5k-auto`)
+
+Déposez vos scripts ici (un `.sh` par expérience) — **copie manuelle** depuis `experiences/` ou scripts perso :
+
+```
+scrip_run/
+  lille/
+    chicoree/    ← 1 job OAR, file GPU 4 parallèles + suite automatique
+    chuc/        ← 1 job OAR, file GPU 4 parallèles
+  lyon/
+    sirius/      ← 1 job OAR, file GPU 8 parallèles
+```
+
+**Important** : `make g5k-auto` soumet **1 job OAR par dossier cluster**, pas 1 par `.sh`.
+Le parallélisme et l'enchaînement de la file sont gérés sur le nœud par `run_gpu_queue.sh`.
+
+Le nom du sous-dossier = cluster OAR (`-p chicoree`, `chuc`, `sirius`).
+
+**Mode manuel** (réservation `-r`) : utilisez plutôt `chicoree_experiences/`, `chuc_experiences/`, `sirius_experiences/`.
+
+Documentation complète : **`scrip_grid_5000/README.md`**

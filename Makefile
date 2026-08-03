@@ -28,12 +28,23 @@ PILOT_CONFIG_SMOKE := $(SNN_ROOT)/scrip_grid_5000/pilot_grid/config_smoke.yaml
 PILOT_PYTHON := $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 PILOT_WATCH_INTERVAL ?= 300
 
+MANUAL_SCRIPT := $(SNN_ROOT)/scrip_grid_5000/run_manual_site.sh
+RESERVE_SCRIPT := $(SNN_ROOT)/scrip_grid_5000/reserve_manual.sh
+RESERVE_START ?=
+RESERVE_END ?=
+RESERVE_TAG ?= run
+
 .PHONY: help job-status setup setup-venv setup-g5k list-python-modules check-deps print-python interactive \
 	download-data download-cifar10 download-cifar10-dvs prepare-cifar10-dvs \
-	pilot-grid pilot-grid-watch grid-watch \
+	g5k-auto g5k-auto-follow g5k-auto-watch g5k-auto-restart g5k-auto-clean g5k-auto-smoke g5k-auto-smoke-watch g5k-test-auto \
+	g5k-book-lille g5k-book-lyon g5k-run-lille g5k-run-lyon \
+	g5k-restart-lille g5k-restart-lyon g5k-clean-manual g5k-check-lille g5k-check-lyon \
+	g5k-test-chicoree g5k-test-sirius g5k-help \
+	pilot-grid pilot-grid-watch pilot-grid-fresh pilot-grid-clean grid-watch \
 	prepare-pilot-smoke pilot-grid-smoke pilot-grid-smoke-watch pilot-smoke \
-	prepare-chicoree-smoke chicoree-smoke-test \
-	prepare-sirius-smoke sirius-smoke-test \
+	manual-reserve-lille manual-reserve-lyon manual-run-lille manual-run-lyon \
+	manual-run-lille-fresh manual-run-lyon-fresh manual-fresh manual-dry-run-lille manual-dry-run-lyon \
+	prepare-chicoree-smoke prepare-sirius-smoke \
 	$(RESERVE_TARGETS) $(TRAIN_TARGETS) $(FRESH_TARGETS) reserve-all train-all
 
 help:
@@ -93,26 +104,20 @@ help:
 	@echo "  make job-status"
 	@echo "  cd spikformer && make logs"
 	@echo ""
-	@echo "Orchestrateur Grid5000 (local, scripts dans scrip_grid_5000/scrip_run/):"
-	@echo "  make pilot-grid              # une tournée (config prod, nuit)"
-	@echo "  make pilot-grid-watch        # relance toutes les $(PILOT_WATCH_INTERVAL)s (Ctrl+C pour arrêter)"
-	@echo "  make grid-watch              # alias de pilot-grid-watch"
-	@echo "  make pilot-grid-watch PILOT_WATCH_INTERVAL=600"
+	@echo "─── Grid'5000 — campagnes HP-STAtten (make g5k-help) ───"
 	@echo ""
-	@echo "Smoke test orchestrateur (jour, walltime 10 min, 2 epochs, petites données) :"
-	@echo "  make prepare-pilot-smoke     # 3 scripts test (Lille chicoree/chuc + Lyon sirius)"
-	@echo "  git push                     # configs smoke sur Grid5000"
-	@echo "  make pilot-grid-smoke        # soumet avec config_smoke.yaml"
-	@echo "  make pilot-grid-smoke-watch  # suivre jusqu'à récupération"
-	@echo "  make pilot-smoke             # prepare-pilot-smoke + pilot-grid-smoke"
+	@echo "  AUTO (local, file OAR nuit)     scrip_run/<site>/<cluster>/*.sh"
+	@echo "    make g5k-auto                 soumettre tout (1 fois, puis PC peut s'éteindre)"
+	@echo "    make g5k-auto-follow          suivre + rapatrier (sans resoumettre)"
+	@echo "    make g5k-auto-restart         nettoyer + soumettre"
 	@echo ""
-	@echo "Test file chicorée (smoke, day 15 min, 6 jobs → 4 GPU + queue) :"
-	@echo "  make prepare-chicoree-smoke  # 6 scripts dans chicoree_experiences/"
-	@echo "  make chicoree-smoke-test     # rappel des commandes flille"
+	@echo "  MANUEL (frontale, créneau -r)   <cluster>_experiences/*.sh"
+	@echo "    make g5k-book-lille  RESERVE_START=... RESERVE_END=...   # flille"
+	@echo "    make g5k-book-lyon   RESERVE_START=... RESERVE_END=...   # flyon"
+	@echo "    make g5k-run-lille                 # lancer au créneau"
+	@echo "    make g5k-restart-lille             # nettoyer + lancer"
 	@echo ""
-	@echo "Test file sirius / Lyon (smoke, day 20 min, 10 jobs → 8 GPU + queue) :"
-	@echo "  make prepare-sirius-smoke    # 10 scripts dans sirius_experiences/"
-	@echo "  make sirius-smoke-test       # rappel des commandes flyon"
+	@echo "  Doc : scrip_grid_5000/README.md"
 	@echo ""
 	@echo "Variables globales:"
 	@echo "  DATA_DIR=$(DATA_DIR)  DATASET=$(DATASET)"
@@ -124,48 +129,131 @@ help:
 job-status:
 	@oarstat -u $$USER 2>/dev/null || oarstat 2>/dev/null || echo "oarstat indisponible (hors Grid5000 ?)"
 
-# Orchestrateur pilot_grid : lancer depuis la racine du repo (machine locale).
-pilot-grid:
+# =============================================================
+# Grid'5000 — noms mémorables (préfixe g5k-)
+#   auto   = file OAR nuit, depuis la machine locale
+#   book   = réserver un créneau (-r), depuis la frontale
+#   run    = lancer les files sur nœud, au créneau
+#   restart = nettoyer + relancer
+# =============================================================
+
+g5k-help:
+	@echo "Grid'5000 — commandes g5k-*"
+	@echo ""
+	@echo "AUTO (machine locale) — dossier scrip_run/<site>/<cluster>/"
+	@echo "  g5k-auto              1 job OAR par dossier cluster (file GPU auto sur le nœud)"
+	@echo "  g5k-auto-follow       suivre les jobs + rapatrier outputs/ (sans resoumettre)"
+	@echo "  g5k-auto-restart      nettoyer état/archives/outputs + soumettre"
+	@echo "  g5k-auto-clean        nettoyer seulement"
+	@echo ""
+	@echo "  Les jobs OAR tournent sur Grid'5000 même PC éteint après g5k-auto."
+	@echo "  g5k-auto-follow est optionnel (rapatriement local des résultats)."
+	@echo ""
+	@echo "MANUEL (frontale) — dossiers chicoree_experiences/, chuc_experiences/, sirius_experiences/"
+	@echo "  g5k-book-lille        réserver chicorée + chuc  (flille)"
+	@echo "  g5k-book-lyon         réserver sirius           (flyon)"
+	@echo "  g5k-run-lille         lancer les files Lille"
+	@echo "  g5k-run-lyon          lancer la file Lyon"
+	@echo "  g5k-restart-lille     nettoyer + lancer Lille"
+	@echo "  g5k-restart-lyon      nettoyer + lancer Lyon"
+	@echo "  g5k-clean-manual      nettoyer archives/logs manuel"
+	@echo "  g5k-check-lille       afficher la file sans lancer"
+	@echo ""
+	@echo "Tests smoke (jour) : g5k-test-chicoree | g5k-test-sirius"
+	@echo ""
+	@echo "Variables réservation : RESERVE_START  RESERVE_END  RESERVE_TAG"
+	@echo "Doc : scrip_grid_5000/README.md"
+
+# --- Mode auto ---
+
+g5k-auto:
 	PILOT_CONFIG=$(PILOT_CONFIG) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG)
 
-pilot-grid-watch:
-	watch -n $(PILOT_WATCH_INTERVAL) "PILOT_CONFIG=$(PILOT_CONFIG) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG)"
+g5k-auto-follow:
+	watch -n $(PILOT_WATCH_INTERVAL) "PILOT_CONFIG=$(PILOT_CONFIG) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG) --follow-only"
 
-prepare-pilot-smoke:
+g5k-auto-watch: g5k-auto-follow
+
+g5k-auto-restart:
+	bash $(SNN_ROOT)/scrip_grid_5000/pilot_grid_fresh.sh
+	$(MAKE) g5k-auto
+
+g5k-auto-clean:
+	bash $(SNN_ROOT)/scrip_grid_5000/pilot_grid_fresh.sh
+
+g5k-test-auto:
 	bash $(SNN_ROOT)/scrip_grid_5000/prepare_pilot_smoke.sh
 
-pilot-grid-smoke:
+g5k-auto-smoke:
 	PILOT_CONFIG=$(PILOT_CONFIG_SMOKE) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG_SMOKE)
 
-pilot-grid-smoke-watch:
+g5k-auto-smoke-watch:
 	watch -n $(PILOT_WATCH_INTERVAL) "PILOT_CONFIG=$(PILOT_CONFIG_SMOKE) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG_SMOKE)"
 
-pilot-smoke: prepare-pilot-smoke pilot-grid-smoke
+# --- Mode manuel ---
 
-prepare-chicoree-smoke:
+g5k-book-lille:
+	@test -n "$(RESERVE_START)" && test -n "$(RESERVE_END)" || \
+		(echo "Usage: make g5k-book-lille RESERVE_START='2026-08-04 19:00:00' RESERVE_END='2026-08-05 09:00:00' RESERVE_TAG=04"; exit 1)
+	RESERVE_START="$(RESERVE_START)" RESERVE_END="$(RESERVE_END)" RESERVE_TAG="$(RESERVE_TAG)" \
+		CHICOREE_GPU="$(CHICOREE_GPU)" CHUC_GPU="$(CHUC_GPU)" \
+		bash $(RESERVE_SCRIPT) lille
+
+g5k-book-lyon:
+	@test -n "$(RESERVE_START)" && test -n "$(RESERVE_END)" || \
+		(echo "Usage: make g5k-book-lyon RESERVE_START='2026-08-04 19:00:00' RESERVE_END='2026-08-05 09:00:00' RESERVE_TAG=04"; exit 1)
+	RESERVE_START="$(RESERVE_START)" RESERVE_END="$(RESERVE_END)" RESERVE_TAG="$(RESERVE_TAG)" \
+		SIRIUS_GPU="$(SIRIUS_GPU)" \
+		bash $(RESERVE_SCRIPT) lyon
+
+g5k-run-lille:
+	bash $(MANUAL_SCRIPT) lille
+
+g5k-run-lyon:
+	bash $(MANUAL_SCRIPT) lyon
+
+g5k-restart-lille: g5k-clean-manual
+	$(MAKE) g5k-run-lille
+
+g5k-restart-lyon: g5k-clean-manual
+	$(MAKE) g5k-run-lyon
+
+g5k-clean-manual:
+	bash $(SNN_ROOT)/scrip_grid_5000/manual_fresh.sh
+
+g5k-check-lille:
+	bash $(MANUAL_SCRIPT) lille --dry-run
+
+g5k-check-lyon:
+	bash $(MANUAL_SCRIPT) lyon --dry-run
+
+g5k-test-chicoree:
 	bash $(SNN_ROOT)/scrip_grid_5000/prepare_chicoree_smoke.sh
 
-chicoree-smoke-test: prepare-chicoree-smoke
-	@echo ""
-	@echo "=== chicorée / flille — day 15 min, 4 GPU ==="
-	@echo "   oarsub -I -p chicoree -t exotic -t day -l host=1/gpu=4,walltime=0:15:00 -q default"
-	@echo "   bash scrip_grid_5000/run_chicoree_queue.sh"
-	@echo "   Doc : Notes/gpureser.md"
-	@echo ""
-
-prepare-sirius-smoke:
+g5k-test-sirius:
 	bash $(SNN_ROOT)/scrip_grid_5000/prepare_sirius_smoke.sh
 
-sirius-smoke-test: prepare-sirius-smoke
-	@echo ""
-	@echo "=== sirius / flyon — day 20 min, 8 GPU ==="
-	@echo "   oarsub -I -p sirius -t exotic -t day -l host=1/gpu=8,walltime=0:20:00 -q default"
-	@echo "   bash scrip_grid_5000/run_sirius_queue.sh"
-	@echo "   Doc : Notes/gpures_sirius.md"
-	@echo ""
+# --- Alias anciens noms (compatibilité) ---
 
-# Alias court pour la surveillance continue de l'orchestrateur.
-grid-watch: pilot-grid-watch
+pilot-grid: g5k-auto
+pilot-grid-watch grid-watch: g5k-auto-watch
+pilot-grid-fresh: g5k-auto-restart
+pilot-grid-clean: g5k-auto-clean
+prepare-pilot-smoke: g5k-test-auto
+pilot-grid-smoke: g5k-auto-smoke
+pilot-grid-smoke-watch: g5k-auto-smoke-watch
+pilot-smoke: g5k-test-auto g5k-auto-smoke
+manual-reserve-lille: g5k-book-lille
+manual-reserve-lyon: g5k-book-lyon
+manual-run-lille: g5k-run-lille
+manual-run-lyon: g5k-run-lyon
+manual-run-lille-fresh: g5k-restart-lille
+manual-run-lyon-fresh: g5k-restart-lyon
+manual-fresh: g5k-clean-manual
+manual-dry-run-lille: g5k-check-lille
+manual-dry-run-lyon: g5k-check-lyon
+prepare-chicoree-smoke: g5k-test-chicoree
+prepare-sirius-smoke: g5k-test-sirius
 
 # Réservation interactive GPU (frontale → shell sur nœud, puis make train-*)
 interactive:

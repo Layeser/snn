@@ -2,7 +2,7 @@
 # =============================================================
 # Orchestrateur GPU sur nœud réservé — file + parallélisme
 #
-# Clusters supportés : chicoree (4 GPU), sirius (8 GPU)
+# Clusters supportés : chicoree (4 GPU), chuc (4 GPU), sirius (8 GPU)
 #
 # Usage :
 #   bash scrip_grid_5000/run_gpu_queue.sh --cluster chicoree
@@ -10,6 +10,7 @@
 #
 # Wrappers :
 #   run_chicoree_queue.sh  → --cluster chicoree
+#   run_chuc_queue.sh      → --cluster chuc
 #   run_sirius_queue.sh    → --cluster sirius
 # =============================================================
 set -euo pipefail
@@ -18,8 +19,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 START_RUN="${SCRIPT_DIR}/start_run.sh"
 SENTINEL='=== EXPERIENCE TERMINEE AVEC SUCCES ==='
+CLUSTER_SENTINEL='=== CLUSTER QUEUE TERMINEE AVEC SUCCES ==='
 
 CLUSTER=""
+QUEUE_DIR=""
 JOB_ID=""
 MAX_GPUS=""
 DO_GIT_PULL=1
@@ -31,11 +34,12 @@ usage() {
 Orchestrateur GPU Grid'5000 (file + parallélisme)
 
 Usage :
-  bash scrip_grid_5000/run_gpu_queue.sh --cluster <chicoree|sirius> [options]
+  bash scrip_grid_5000/run_gpu_queue.sh --cluster <chicoree|chuc|sirius> [options]
 
 Options :
-  --cluster NAME   chicoree (4 GPU) ou sirius (8 GPU) — requis
+  --cluster NAME   chicoree (4 GPU), chuc (4 GPU), sirius (8 GPU) — requis
   --job-id ID      Connexion OAR depuis la frontale + lancement
+  --queue-dir PATH Dossier file (*.sh) — défaut : <cluster>_experiences/
   --max-gpus N     Slots parallèles (défaut : auto via nvidia-smi)
   --no-git-pull    Ne pas git pull avant démarrage
   --dry-run        Affiche la file sans lancer
@@ -50,7 +54,11 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --cluster)
-            CLUSTER="${2:?--cluster requiert chicoree ou sirius}"
+            CLUSTER="${2:?--cluster requiert chicoree, chuc ou sirius}"
+            shift 2
+            ;;
+        --queue-dir)
+            QUEUE_DIR="${2:?--queue-dir requiert un chemin}"
             shift 2
             ;;
         --job-id)
@@ -80,7 +88,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$CLUSTER" ]]; then
-    echo "Erreur : --cluster chicoree|sirius requis." >&2
+    echo "Erreur : --cluster chicoree|chuc|sirius requis." >&2
     usage 1
 fi
 
@@ -89,17 +97,21 @@ case "$CLUSTER" in
         DEFAULT_GPUS=4
         FRONTEND="flille"
         ;;
+    chuc)
+        DEFAULT_GPUS=4
+        FRONTEND="flille"
+        ;;
     sirius)
         DEFAULT_GPUS=8
         FRONTEND="flyon"
         ;;
     *)
-        echo "Erreur : cluster inconnu '${CLUSTER}' (chicoree|sirius)." >&2
+        echo "Erreur : cluster inconnu '${CLUSTER}' (chicoree|chuc|sirius)." >&2
         exit 1
         ;;
 esac
 
-QUEUE_DIR="${GPU_QUEUE_DIR:-${SCRIPT_DIR}/${CLUSTER}_experiences}"
+QUEUE_DIR="${QUEUE_DIR:-${GPU_QUEUE_DIR:-${SCRIPT_DIR}/${CLUSTER}_experiences}}"
 ARCHIVE_OK="${QUEUE_DIR}/archive/done"
 ARCHIVE_FAIL="${QUEUE_DIR}/archive/failed"
 LOG_ROOT="${GPU_LOG_DIR:-${PROJECT_DIR}/outputs/${CLUSTER}_queue}"
@@ -131,6 +143,9 @@ connect_and_run() {
         remote_cmd+=$(printf ' && git pull --ff-only')
     fi
     remote_cmd+=$(printf ' && bash %q --cluster %q --no-git-pull' "$SELF_SCRIPT" "$CLUSTER")
+    if [[ -n "$QUEUE_DIR" ]]; then
+        remote_cmd+=$(printf ' --queue-dir %q' "$QUEUE_DIR")
+    fi
     if [[ "$DRY_RUN" -eq 1 ]]; then
         remote_cmd+=' --dry-run'
     fi
@@ -316,5 +331,8 @@ echo "Archive : $ARCHIVE_OK | $ARCHIVE_FAIL"
 echo "============================================================"
 
 if [[ "$FAIL_COUNT" -gt 0 ]]; then
+    echo "=== CLUSTER QUEUE TERMINEE AVEC ERREUR(S) ==="
     exit 1
 fi
+
+echo "$CLUSTER_SENTINEL"

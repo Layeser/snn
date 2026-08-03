@@ -68,7 +68,9 @@ scrip_grid_5000/scrip_run/archive/
 scrip_grid_5000/chicoree_experiences/*.sh
 scrip_grid_5000/chicoree_experiences/archive/
 scrip_grid_5000/sirius_experiences/*.sh
-scrip_grid_5000/sirius_experiences/archive/
+scrip_grid_5000/chuc_experiences/*.sh
+scrip_grid_5000/chuc_experiences/archive/
+scrip_grid_5000/manual_jobs.env
 scrip_grid_5000/pilot_grid/run_status.json
 
 assets/
