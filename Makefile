@@ -36,7 +36,7 @@ RESERVE_TAG ?= run
 
 .PHONY: help job-status setup setup-venv setup-g5k list-python-modules check-deps print-python interactive \
 	download-data download-cifar10 download-cifar10-dvs prepare-cifar10-dvs \
-	g5k-auto g5k-auto-follow g5k-auto-watch g5k-auto-restart g5k-auto-clean g5k-auto-smoke g5k-auto-smoke-watch g5k-test-auto \
+	g5k-auto g5k-auto-follow g5k-auto-watch g5k-auto-restart g5k-auto-clean g5k-fresh g5k-auto-smoke g5k-auto-smoke-watch g5k-test-auto \
 	g5k-book-lille g5k-book-lyon g5k-run-lille g5k-run-lyon \
 	g5k-restart-lille g5k-restart-lyon g5k-clean-manual g5k-check-lille g5k-check-lyon \
 	g5k-test-chicoree g5k-test-sirius g5k-help \
@@ -143,8 +143,9 @@ g5k-help:
 	@echo "AUTO (machine locale) — dossier scrip_run/<site>/<cluster>/"
 	@echo "  g5k-auto              1 job OAR par dossier cluster (file GPU auto sur le nœud)"
 	@echo "  g5k-auto-follow       suivre les jobs + rapatrier outputs/ (sans resoumettre)"
-	@echo "  g5k-auto-restart      nettoyer état/archives/outputs + soumettre"
-	@echo "  g5k-auto-clean        nettoyer seulement"
+	@echo "  g5k-auto-restart      nettoyer local + frontales + soumettre"
+	@echo "  g5k-auto-clean        nettoyer local seulement"
+	@echo "  g5k-fresh             nettoyer local + frontales (git restore scrip_grid_5000/)"
 	@echo ""
 	@echo "  Les jobs OAR tournent sur Grid'5000 même PC éteint après g5k-auto."
 	@echo "  g5k-auto-follow est optionnel (rapatriement local des résultats)."
@@ -154,9 +155,9 @@ g5k-help:
 	@echo "  g5k-book-lyon         réserver sirius           (flyon)"
 	@echo "  g5k-run-lille         lancer les files Lille"
 	@echo "  g5k-run-lyon          lancer la file Lyon"
-	@echo "  g5k-restart-lille     nettoyer + lancer Lille"
-	@echo "  g5k-restart-lyon      nettoyer + lancer Lyon"
-	@echo "  g5k-clean-manual      nettoyer archives/logs manuel"
+	@echo "  g5k-restart-lille     g5k-fresh + lancer Lille"
+	@echo "  g5k-restart-lyon      g5k-fresh + lancer Lyon"
+	@echo "  g5k-clean-manual      alias g5k-fresh --local"
 	@echo "  g5k-check-lille       afficher la file sans lancer"
 	@echo ""
 	@echo "Tests smoke (jour) : g5k-test-chicoree | g5k-test-sirius"
@@ -175,11 +176,14 @@ g5k-auto-follow:
 g5k-auto-watch: g5k-auto-follow
 
 g5k-auto-restart:
-	bash $(SNN_ROOT)/scrip_grid_5000/pilot_grid_fresh.sh
+	bash $(SNN_ROOT)/scrip_grid_5000/g5k_fresh.sh
 	$(MAKE) g5k-auto
 
 g5k-auto-clean:
-	bash $(SNN_ROOT)/scrip_grid_5000/pilot_grid_fresh.sh
+	bash $(SNN_ROOT)/scrip_grid_5000/g5k_fresh.sh --local
+
+g5k-fresh:
+	bash $(SNN_ROOT)/scrip_grid_5000/g5k_fresh.sh
 
 g5k-test-auto:
 	bash $(SNN_ROOT)/scrip_grid_5000/prepare_pilot_smoke.sh
@@ -212,14 +216,14 @@ g5k-run-lille:
 g5k-run-lyon:
 	bash $(MANUAL_SCRIPT) lyon
 
-g5k-restart-lille: g5k-clean-manual
+g5k-restart-lille: g5k-fresh
 	$(MAKE) g5k-run-lille
 
-g5k-restart-lyon: g5k-clean-manual
+g5k-restart-lyon: g5k-fresh
 	$(MAKE) g5k-run-lyon
 
 g5k-clean-manual:
-	bash $(SNN_ROOT)/scrip_grid_5000/manual_fresh.sh
+	bash $(SNN_ROOT)/scrip_grid_5000/g5k_fresh.sh --local
 
 g5k-check-lille:
 	bash $(MANUAL_SCRIPT) lille --dry-run

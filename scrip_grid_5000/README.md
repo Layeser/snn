@@ -45,29 +45,49 @@ scrip_run/lyon/sirius/exp_x.sh …            →  1 job OAR
 ### Workflow recommandé
 
 ```bash
-# 1. Une seule fois : envoie tous les .sh vers les frontales (oarsub)
+# 0. Copiez vos .sh dans scrip_run/, committez, pushez
+git push
+
+# 1. Aligner local + frontales (git restore + nettoyage archives/logs)
+make g5k-fresh
+
+# 2. Soumettre les jobs OAR
 make g5k-auto
 # → Les jobs tournent sur Grid'5000 même si votre PC s'éteint.
 
-# 2. (Optionnel, PC allumé) Suivre + rapatrier les résultats en local
+# 3. (Optionnel) Suivre + rapatrier les résultats en local
 make g5k-auto-follow
-# → Ne resoumet PAS de nouveaux jobs, seulement oarstat + téléchargement outputs/
 ```
 
 | Commande | Soumet ? | Rôle |
 |----------|----------|------|
+| `g5k-fresh` | Non | Nettoie local **+** flille/flyon ; `git restore scrip_grid_5000/` sur les frontales |
 | `g5k-auto` | **Oui** (1 fois) | 1 job OAR par dossier cluster → file GPU sur le nœud |
 | `g5k-auto-follow` | **Non** | Suivre jobs en cours, rapatrier `outputs/` quand fini |
-| `g5k-auto-restart` | Oui | Nettoyer + resoumettre |
-| `g5k-auto-clean` | Non | Nettoyer seulement |
+| `g5k-auto-restart` | Oui | `g5k-fresh` + resoumettre |
+| `g5k-auto-clean` | Non | Nettoyer **local** seulement (alias `g5k-fresh --local`) |
 
 ```bash
 # Reprendre le suivi sans resoumettre (jobs déjà lancés)
 make g5k-auto-follow
 
-# Nettoyer + soumettre à nouveau
+# Nouvelle campagne : fresh partout puis soumettre
 make g5k-auto-restart
 ```
+
+## Nettoyage unifié (`g5k-fresh`)
+
+Avant chaque campagne, pour repartir propre et **identique sur local + frontales** :
+
+```bash
+git push                              # vos .sh dans scrip_run/ ou *_experiences/
+make g5k-fresh                        # depuis votre PC
+```
+
+**Local** : `run_status.json`, archives, `outputs/`  
+**flille + flyon** (SSH) : `git pull --ff-only` + `git restore scrip_grid_5000/` + même nettoyage
+
+Vos `.sh` actifs (non archivés) sont **conservés**. Seuls les artefacts d'exécution sont supprimés.
 
 ---
 
@@ -134,15 +154,16 @@ make g5k-test-sirius      # 10 scripts → sirius_experiences/
 |----------|-----|--------|
 | `g5k-auto` | local | 1 job OAR par dossier cluster (file GPU auto) |
 | `g5k-auto-follow` | local | Suivre + rapatrier (sans resoumettre) |
-| `g5k-auto-restart` | local | Nettoie + soumet `scrip_run/` |
-| `g5k-auto-clean` | local | Nettoie seulement |
+| `g5k-auto-restart` | local | `g5k-fresh` + soumettre |
+| `g5k-auto-clean` | local | Nettoyage local seulement |
+| `g5k-fresh` | local → SSH | Local + flille + flyon alignés sur git |
 | `g5k-book-lille` | flille | Réserve chicorée + chuc |
 | `g5k-book-lyon` | flyon | Réserve sirius |
 | `g5k-run-lille` | flille | Lance files manuelles Lille |
 | `g5k-run-lyon` | flyon | Lance file sirius |
-| `g5k-restart-lille` | flille | Nettoie + lance Lille |
-| `g5k-restart-lyon` | flyon | Nettoie + lance Lyon |
-| `g5k-clean-manual` | partout | Nettoie archives/logs manuel |
+| `g5k-restart-lille` | flille | `g5k-fresh` + lancer files Lille |
+| `g5k-restart-lyon` | flyon | `g5k-fresh` + lancer file Lyon |
+| `g5k-clean-manual` | local | Alias nettoyage local (`g5k-fresh --local`) |
 | `g5k-check-lille` | flille | Dry-run file Lille |
 
 ---
