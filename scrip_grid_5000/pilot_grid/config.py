@@ -31,6 +31,11 @@ class Config:
     sites: list = field(default_factory=lambda: ["lille"])
     max_jobs_per_site: int = 2
     cluster_defaults_file: str = "cluster_defaults.yaml"
+    # per_cluster : 1 job OAR par dossier cluster (file GPU sur le noeud)
+    # per_script  : 1 job OAR par .sh (besteffort, reprise apres preemption)
+    submission_mode: str = "per_cluster"
+    # Racines par site (ex. besteffort_lille / besteffort_lyon). Vide = local_scripts_root/<site>/
+    site_scripts_root: dict = field(default_factory=dict)
 
     # Options OAR par defaut (prioritaires sur les # OAR_option des scripts)
     walltime: str = "10:00:00"

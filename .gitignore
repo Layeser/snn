@@ -75,6 +75,11 @@ scrip_grid_5000/manual_jobs.env
 scrip_grid_5000/reserve_smoke.yaml
 scrip_grid_5000/.book_smoke.env
 scrip_grid_5000/pilot_grid/run_status.json
+besteffort_state/run_status.json
+besteffort_lille/*.sh
+besteffort_lyon/*.sh
+besteffort_lille/archive/
+besteffort_lyon/archive/
 
 assets/
 .cursor/

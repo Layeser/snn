@@ -1,0 +1,30 @@
+# Grid5000 — mode besteffort (depuis votre PC local)
+#
+# Deux dossiers a la racine du repo :
+#   besteffort_lille/*.sh   → soumis depuis la frontale Lille (flille)
+#   besteffort_lyon/*.sh    → soumis depuis la frontale Lyon (flyon)
+#
+# Pas de reservation chicoree/chuc/sirius : OAR assigne n'importe quel GPU libre.
+
+user: kasekou
+ssh_gateway: access.grid5000.fr
+remote_project_dir: internship/snn
+
+sites:
+  - lille
+  - lyon
+
+# Scripts locaux : besteffort_<site>/*.sh a la racine du repo
+# 1 job OAR = 1 GPU = 1 experience
+max_jobs_per_site: 8
+walltime: "4:00:00"
+oar_queue: besteffort
+# host=1/gpu=1 sans -p cluster (machine quelconque)
+oar_resources: host=1/gpu=1
+
+state_file: besteffort_state/run_status.json
+local_outputs_dir: outputs
+
+git_enabled: true
+git_branch: main
+git_repo: "git@github.com:Layeser/snn.git"

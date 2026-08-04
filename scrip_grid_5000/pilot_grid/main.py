@@ -106,24 +106,55 @@ def load_cluster_defaults() -> dict:
         return yaml.safe_load(f) or {}
 
 
+def _repo_root() -> str:
+    return os.path.dirname(PILOT_GRID_DIR)
+
+
 def _scripts_root_abs() -> str:
-    return os.path.normpath(CFG.local_scripts_root)
+    root = CFG.local_scripts_root
+    if not os.path.isabs(root):
+        root = os.path.join(_repo_root(), root)
+    return os.path.normpath(root)
+
+
+def _site_scripts_root(site: str) -> str:
+    """Racine locale des scripts pour un site (besteffort_lille ou scrip_run/lille)."""
+    custom = getattr(CFG, "site_scripts_root", None) or {}
+    if site in custom:
+        root = custom[site]
+        if not os.path.isabs(root):
+            root = os.path.join(_repo_root(), root)
+        return os.path.normpath(root)
+    return os.path.join(_scripts_root_abs(), site)
 
 
 def meta_script(chemin_local: str) -> tuple[str, str, str, str] | None:
-    """Retourne (rel_key, site, cluster, basename) pour scrip_run/<site>/<cluster>/x.sh."""
+    """Retourne (rel_key, site, cluster, basename) pour un script d'experience."""
+    chemin_local = os.path.normpath(chemin_local)
+    repo = _repo_root()
     try:
-        rel = os.path.relpath(os.path.normpath(chemin_local), _scripts_root_abs())
+        rel = os.path.relpath(chemin_local, repo).replace("\\", "/")
     except ValueError:
         return None
     parts = Path(rel).parts
-    if len(parts) < 3:
+    if len(parts) < 4 or not parts[-1].endswith(".sh"):
         return None
-    site, cluster, nom = parts[0], parts[1], parts[-1]
-    if not nom.endswith(".sh"):
+    if parts[0] != "scrip_grid_5000":
         return None
-    rel_key = f"{site}/{cluster}/{nom}"
-    return rel_key, site, cluster, nom
+
+    nom = parts[-1]
+    if parts[1].startswith("besteffort_"):
+        site = parts[1].replace("besteffort_", "", 1)
+        cluster = parts[2]
+        rel_key = rel
+        return rel_key, site, cluster, nom
+
+    if parts[1] == "scrip_run" and len(parts) >= 5:
+        site, cluster = parts[2], parts[3]
+        rel_key = rel
+        return rel_key, site, cluster, nom
+
+    return None
 
 
 def cluster_rel_key(site: str, cluster: str) -> str:
@@ -167,9 +198,9 @@ def decouvrir_clusters_en_attente(site: str, etats: dict) -> list[tuple[str, str
 
 
 def decouvrir_scripts_en_attente(site: str, etats: dict) -> list[tuple[str, str, str, str]]:
-    """Scripts dans scrip_run/<site>/<cluster>/*.sh pas encore TERMINE."""
+    """Scripts locaux pas encore TERMINE (besteffort_* ou scrip_run/<site>/)."""
     resultat = []
-    site_dir = os.path.join(_scripts_root_abs(), site)
+    site_dir = _site_scripts_root(site)
     if not os.path.isdir(site_dir):
         return resultat
 
@@ -725,9 +756,19 @@ def etape3_recuperation(
 
 
 def archiver_script_local(rel_key, chemin_actuel, *, persist_state=True):
-    """Déplace le script exécuté dans scrip_run/archive/<site>/<cluster>/"""
-    chemin_dest = os.path.join(_scripts_root_abs(), "archive", rel_key)
-    os.makedirs(os.path.dirname(chemin_dest), exist_ok=True)
+    """Déplace le script exécuté dans archive/done/ (à côté du script ou scrip_run/archive/)."""
+    if getattr(CFG, "submission_mode", "per_cluster") == "per_script":
+        archive_dir = os.path.join(os.path.dirname(chemin_actuel), "archive", "done")
+        os.makedirs(archive_dir, exist_ok=True)
+        name = os.path.basename(chemin_actuel)
+        chemin_dest = os.path.join(archive_dir, name)
+        if os.path.exists(chemin_dest):
+            chemin_dest = os.path.join(
+                archive_dir, f"{time.strftime('%Y%m%d_%H%M%S')}_{name}"
+            )
+    else:
+        chemin_dest = os.path.join(_scripts_root_abs(), "archive", rel_key)
+        os.makedirs(os.path.dirname(chemin_dest), exist_ok=True)
 
     if os.path.exists(chemin_actuel):
         shutil.move(chemin_actuel, chemin_dest)
@@ -838,7 +879,86 @@ def piloter_un_script(ssh_client, site, rel_key, info, *, git_sync=True):
 
 
 # =============================================================
-# 6. CHEF D'ORCHESTRE (MAIN PRINCIPAL)
+# 6. CHEF D'ORCHESTRE — mode per_script (besteffort)
+# =============================================================
+
+def main_per_script(args):
+    """1 job OAR par .sh ; resoumission automatique apres preemption (KILLED)."""
+    print("=======================================================")
+    if args.follow_only:
+        print("MODE SUIVI BESTEFFORT — pas de nouvelle soumission OAR")
+    else:
+        print("ORCHESTRATEUR BESTEFFORT — 1 GPU par experience")
+    print(f"Utilisateur : {CFG.user} | Sites : {CFG.sites}")
+    print(f"Parallele max / site : {CFG.max_jobs_per_site}")
+    print("=======================================================")
+
+    tous_les_etats = charger_tous_les_etats()
+
+    for site in CFG.sites:
+        scripts_actifs = [
+            (cle, info)
+            for cle, info in tous_les_etats.items()
+            if info.get("site") == site
+            and info.get("etape") != "TERMINE"
+            and not est_cle_cluster(cle)
+        ]
+        scripts_en_attente = decouvrir_scripts_en_attente(site, tous_les_etats)
+
+        if not scripts_actifs and not scripts_en_attente:
+            print(f"\n[{site}] Aucun script actif ni en attente.")
+            continue
+
+        nb_actifs = sum(1 for _, info in scripts_actifs if info.get("job_id"))
+        print(
+            f"\n>>> Site {site.upper()} — suivis {len(scripts_actifs)}, "
+            f"jobs OAR {nb_actifs}, en attente {len(scripts_en_attente)}"
+        )
+
+        bastion, ssh_client = connecter_serveur_final(CFG.user, site, CFG.ssh_gateway)
+        if not ssh_client:
+            continue
+
+        try:
+            git_ok = synchroniser_git(ssh_client) if CFG.git_enabled else True
+            if not git_ok:
+                print("[git] Sync echouee — suivi des jobs existants uniquement.")
+
+            for rel_key, info in scripts_actifs:
+                piloter_un_script(ssh_client, site, rel_key, info, git_sync=False)
+
+            tous_les_etats = charger_tous_les_etats()
+            slots_libres = CFG.max_jobs_per_site - decompte_jobs_actifs_site(
+                tous_les_etats, site
+            )
+
+            if git_ok and scripts_en_attente and not args.follow_only and slots_libres > 0:
+                a_soumettre = scripts_en_attente[:slots_libres]
+                print(
+                    f"[Besteffort] Soumission de {len(a_soumettre)} job(s) sur {site} "
+                    f"({slots_libres} slot(s) libre(s))."
+                )
+                for rel_key, chemin_local, cluster, nom in a_soumettre:
+                    chemin_distant = CFG.remote_script_path(rel_key)
+                    print(f"[Besteffort] oarsub {nom} (cluster {cluster})")
+                    sauvegarder_etat_fichier(
+                        rel_key, "ETAPE_1", "AUCUN", None, site, cluster,
+                        chemin_local, chemin_distant,
+                    )
+                    info_init = obtenir_etat_specifique(rel_key)
+                    piloter_un_script(ssh_client, site, rel_key, info_init, git_sync=False)
+                    tous_les_etats = charger_tous_les_etats()
+
+        finally:
+            deconnecter_serveurs(bastion, ssh_client)
+
+    print("\n=======================================================")
+    print("FIN DE LA TOURNEE BESTEFFORT")
+    print("=======================================================")
+
+
+# =============================================================
+# 7. CHEF D'ORCHESTRE (MAIN PRINCIPAL)
 # =============================================================
 
 def main():
@@ -855,10 +975,22 @@ def main():
         action="store_true",
         help="Suivre les jobs deja soumis et rapatrier les resultats ; ne pas soumettre de nouveaux scripts.",
     )
+    parser.add_argument(
+        "--sites",
+        nargs="+",
+        default=None,
+        help="Limiter aux sites indiques (ex. --sites lyon). Defaut : tous les sites du config.",
+    )
     args = parser.parse_args()
     CFG = load_config(args.config)
+    if args.sites:
+        CFG.sites = args.sites
     global CLUSTER_DEFAULTS
     CLUSTER_DEFAULTS = load_cluster_defaults()
+
+    if getattr(CFG, "submission_mode", "per_cluster") == "per_script":
+        main_per_script(args)
+        return
 
     print("=======================================================")
     if args.follow_only:

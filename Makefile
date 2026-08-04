@@ -27,6 +27,9 @@ PILOT_CONFIG ?= $(SNN_ROOT)/scrip_grid_5000/pilot_grid/config.yaml
 PILOT_CONFIG_SMOKE := $(SNN_ROOT)/scrip_grid_5000/pilot_grid/config_smoke.yaml
 PILOT_PYTHON := $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 PILOT_WATCH_INTERVAL ?= 300
+BESTEFFORT_PILOT := $(SNN_ROOT)/grid5k/besteffort_pilot.py
+BESTEFFORT_CONFIG := $(SNN_ROOT)/grid5k/config.yaml
+BESTEFFORT_WATCH_INTERVAL ?= 600
 
 MANUAL_SCRIPT := $(SNN_ROOT)/scrip_grid_5000/run_manual_site.sh
 SYNC_SCRIP_SCRIPT := $(SNN_ROOT)/scrip_grid_5000/sync_scrip_run_local.sh
@@ -40,6 +43,9 @@ RESERVE_TAG ?= run
 .PHONY: help job-status setup setup-venv setup-g5k list-python-modules check-deps print-python interactive \
 	download-data download-cifar10 download-cifar10-dvs prepare-cifar10-dvs \
 	g5k-auto g5k-auto-follow g5k-auto-watch g5k-auto-restart g5k-auto-clean g5k-fresh g5k-auto-smoke g5k-auto-smoke-watch g5k-test-auto g5k-test-auto-smoke \
+	besteffort besteffort-watch besteffort-check besteffort-fresh \
+	besteffort-lille besteffort-lyon besteffort-watch-lille besteffort-watch-lyon \
+	besteffort-list besteffort-check-lille besteffort-check-lyon \
 	g5k-book-lille g5k-book-lyon g5k-book-smoke g5k-book-smoke-check \
 	g5k-run-lille g5k-run-lyon g5k-run-lille-scrip g5k-run-lyon-scrip \
 	g5k-sync-scrip-run g5k-sync-scrip-run-check \
@@ -126,7 +132,11 @@ help:
 	@echo "    make g5k-run-lille                 # lancer au créneau"
 	@echo "    make g5k-restart-lille             # nettoyer + lancer"
 	@echo ""
-	@echo "  Doc : scrip_grid_5000/README.md"
+	@echo "  BESTEFFORT (GPU quelconque, reprise auto)  besteffort_lille/  besteffort_lyon/"
+	@echo "    make besteffort-watch             # 1 GPU/exp., relance toutes les 10 min"
+	@echo "    make besteffort-watch-lyon          # Lyon seulement"
+	@echo "    Doc : grid5k/README.md"
+	@echo ""
 	@echo ""
 	@echo "Variables globales:"
 	@echo "  DATA_DIR=$(DATA_DIR)  DATASET=$(DATASET)"
@@ -212,6 +222,42 @@ g5k-auto-smoke:
 
 g5k-auto-smoke-watch:
 	watch -n $(PILOT_WATCH_INTERVAL) "PILOT_CONFIG=$(PILOT_CONFIG_SMOKE) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG_SMOKE)"
+
+# --- Besteffort (grid5k/ — indépendant de scrip_grid_5000) ---
+
+besteffort:
+	$(PILOT_PYTHON) $(BESTEFFORT_PILOT) --config $(BESTEFFORT_CONFIG) $(if $(BESTEFFORT_SITES),--sites $(BESTEFFORT_SITES),)
+
+besteffort-watch:
+	watch -n $(BESTEFFORT_WATCH_INTERVAL) "$(PILOT_PYTHON) $(BESTEFFORT_PILOT) --config $(BESTEFFORT_CONFIG) $(if $(BESTEFFORT_SITES),--sites $(BESTEFFORT_SITES),)"
+
+besteffort-check:
+	$(PILOT_PYTHON) $(BESTEFFORT_PILOT) --config $(BESTEFFORT_CONFIG) --follow-only $(if $(BESTEFFORT_SITES),--sites $(BESTEFFORT_SITES),)
+
+besteffort-fresh:
+	bash $(SNN_ROOT)/grid5k/fresh.sh
+
+besteffort-lille:
+	$(MAKE) besteffort BESTEFFORT_SITES=lille
+
+besteffort-lyon:
+	$(MAKE) besteffort BESTEFFORT_SITES=lyon
+
+besteffort-watch-lille:
+	$(MAKE) besteffort-watch BESTEFFORT_SITES=lille
+
+besteffort-watch-lyon:
+	$(MAKE) besteffort-watch BESTEFFORT_SITES=lyon
+
+besteffort-check-lille:
+	$(MAKE) besteffort-check BESTEFFORT_SITES=lille
+
+besteffort-list:
+	@echo "=== besteffort_lille/ ==="
+	@ls -1 besteffort_lille/*.sh 2>/dev/null || echo "  (vide)"
+	@echo ""
+	@echo "=== besteffort_lyon/ ==="
+	@ls -1 besteffort_lyon/*.sh 2>/dev/null || echo "  (vide)"
 
 # --- Mode manuel ---
 
