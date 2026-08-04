@@ -69,9 +69,10 @@ def validate_hpstattn_config(config: dict[str, Any]) -> None:
         raise ValueError(
             f"hybrid_qkv doit être 'true' ou 'false' (reçu: {config['hybrid_qkv']!r})"
         )
-    if config["attention_mode"] not in ("factorized", "sdt"):
+    if config["attention_mode"] not in ("factorized", "sdt", "contrast"):
         raise ValueError(
-            f"attention_mode doit être 'factorized' ou 'sdt' (reçu: {config['attention_mode']!r})"
+            f"attention_mode doit être 'factorized', 'sdt' ou 'contrast' "
+            f"(reçu: {config['attention_mode']!r})"
         )
     if config["membrane_block"] not in ("true", "false"):
         raise ValueError(
