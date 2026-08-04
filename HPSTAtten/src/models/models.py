@@ -25,6 +25,7 @@ class MS_Block_Conv(nn.Module):
         dvs=False,
         layer=0,
         attention_mode="factorized",
+        vct_num=16,
     ):
         super().__init__()
         self.attn = HPSTAtten(
@@ -37,6 +38,7 @@ class MS_Block_Conv(nn.Module):
             dvs=dvs,
             layer=layer,
             attention_mode=attention_mode,
+            vct_num=vct_num,
         )
         self.mlp = MLP(
             in_features=dim,
@@ -68,6 +70,7 @@ class MS_Block_Membrane(nn.Module):
         dvs=False,
         layer=0,
         attention_mode="factorized",
+        vct_num=16,
     ):
         super().__init__()
         self.sn = make_lif(spike_mode, lif_backend=lif_backend)
@@ -81,6 +84,7 @@ class MS_Block_Membrane(nn.Module):
             dvs=dvs,
             layer=layer,
             attention_mode=attention_mode,
+            vct_num=vct_num,
         )
         self.mlp = MLP(
             in_features=dim,
@@ -135,6 +139,7 @@ class HPSTAttenTransformer(nn.Module):
         T=4,
         attention_mode="factorized",
         membrane_block=False,
+        vct_num=16,
     ):
         super().__init__()
         self.T = T
@@ -169,6 +174,7 @@ class HPSTAttenTransformer(nn.Module):
                     dvs=dvs,
                     layer=i,
                     attention_mode=attention_mode,
+                    vct_num=vct_num,
                 )
                 for i in range(depth)
             ]

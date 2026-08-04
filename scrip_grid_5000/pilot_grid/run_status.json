@@ -1,1 +1,60 @@
-{}
+{
+    "lille/chicoree": {
+        "etape": "TERMINE",
+        "statut_oar": "ERREUR",
+        "job_id": null,
+        "site": "lille",
+        "cluster": "chicoree",
+        "chemin_local": null,
+        "chemin_distant": "/home/kasekou/internship/snn",
+        "derniere_verification": "2026-08-03 17:00:23",
+        "scripts": [
+            "scrip_grid_5000/scrip_run/lille/chicoree/smoke_1.sh",
+            "scrip_grid_5000/scrip_run/lille/chicoree/smoke_2.sh",
+            "scrip_grid_5000/scrip_run/lille/chicoree/smoke_3.sh",
+            "scrip_grid_5000/scrip_run/lille/chicoree/smoke_4.sh",
+            "scrip_grid_5000/scrip_run/lille/chicoree/smoke_5.sh",
+            "scrip_grid_5000/scrip_run/lille/chicoree/smoke_6.sh"
+        ]
+    },
+    "lille/chuc": {
+        "etape": "TERMINE",
+        "statut_oar": "ERREUR",
+        "job_id": null,
+        "site": "lille",
+        "cluster": "chuc",
+        "chemin_local": null,
+        "chemin_distant": "/home/kasekou/internship/snn",
+        "derniere_verification": "2026-08-03 16:33:52",
+        "scripts": [
+            "scrip_grid_5000/scrip_run/lille/chuc/smoke_1.sh",
+            "scrip_grid_5000/scrip_run/lille/chuc/smoke_2.sh",
+            "scrip_grid_5000/scrip_run/lille/chuc/smoke_3.sh",
+            "scrip_grid_5000/scrip_run/lille/chuc/smoke_4.sh",
+            "scrip_grid_5000/scrip_run/lille/chuc/smoke_5.sh",
+            "scrip_grid_5000/scrip_run/lille/chuc/smoke_6.sh"
+        ]
+    },
+    "lyon/sirius": {
+        "etape": "TERMINE",
+        "statut_oar": "ERREUR",
+        "job_id": null,
+        "site": "lyon",
+        "cluster": "sirius",
+        "chemin_local": null,
+        "chemin_distant": "/home/kasekou/internship/snn",
+        "derniere_verification": "2026-08-03 16:34:07",
+        "scripts": [
+            "scrip_grid_5000/scrip_run/lyon/sirius/smoke_1.sh",
+            "scrip_grid_5000/scrip_run/lyon/sirius/smoke_10.sh",
+            "scrip_grid_5000/scrip_run/lyon/sirius/smoke_2.sh",
+            "scrip_grid_5000/scrip_run/lyon/sirius/smoke_3.sh",
+            "scrip_grid_5000/scrip_run/lyon/sirius/smoke_4.sh",
+            "scrip_grid_5000/scrip_run/lyon/sirius/smoke_5.sh",
+            "scrip_grid_5000/scrip_run/lyon/sirius/smoke_6.sh",
+            "scrip_grid_5000/scrip_run/lyon/sirius/smoke_7.sh",
+            "scrip_grid_5000/scrip_run/lyon/sirius/smoke_8.sh",
+            "scrip_grid_5000/scrip_run/lyon/sirius/smoke_9.sh"
+        ]
+    }
+}

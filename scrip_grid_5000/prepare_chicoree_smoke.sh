@@ -2,8 +2,9 @@
 # Prépare 6 smoke tests dans chicoree_experiences/ pour tester
 # le parallélisme (4 GPU) + la file d'attente (2 jobs suivants).
 #
-# Usage (sur flille ou en local avant git push) :
-#   ./scrip_grid_5000/prepare_chicoree_smoke.sh
+# Usage (sur flille) :
+#   make g5k-test-chicoree
+#   # ou : bash scrip_grid_5000/prepare_chicoree_smoke.sh
 #
 # Puis réservation day 15 min + orchestrateur (voir Notes/gpureser.md).
 set -euo pipefail
@@ -43,11 +44,11 @@ done
 echo ""
 echo "File prête : 6 jobs → 4 en parallèle puis 2 en file."
 echo ""
-echo "Prochaines étapes sur flille :"
-echo "  1) git pull   # si préparé en local"
-echo "  2) Réservation day 15 min (voir Notes/gpureser.md)"
-echo "  3) bash scrip_grid_5000/run_chicoree_queue.sh --job-id <JOB_ID>"
-echo "     # ou sur le nœud : bash scrip_grid_5000/run_chicoree_queue.sh"
+echo "Prochaines etapes (mode MANUEL — sur flille) :"
+echo "  oarsub -I -p chicoree -t exotic -t day -l host=1/gpu=4,walltime=0:15:00 -q default"
+echo "  bash scrip_grid_5000/run_chicoree_queue.sh"
+echo ""
+echo "Pour smoke AUTO sans intervention : make g5k-test-auto-smoke  (depuis votre PC)"
 echo ""
 echo "Suivi :"
 echo "  tail -f outputs/chicoree_queue/scheduler.log"

@@ -18,31 +18,40 @@ config-help:
 	@echo "  Override : make train CONFIG=config/train_cifar10-dvs.yml DATASET=cifar10-dvs"
 
 # ============================================================================
-# Grille d'ablation attention : attention_mode x hybrid_qkv (4 cases)
-#   grid-hp         factorized + hybride  -> HP-STAtten (référence, défaut)
-#   grid-hp-linear  sdt        + hybride  -> HP-STAtten-linéaire (Hadamard)
-#   grid-statten    factorized + binaire  -> STAtten
-#   grid-sdt        sdt        + binaire  -> SDT pur (mask + add)
+# Grille d'ablation attention : attention_mode x hybrid_qkv (3×2 = 6 cases)
+#   grid-hp              factorized + hybride  -> HP-STAtten (référence)
+#   grid-hp-linear       sdt        + hybride  -> HP-STAtten-linéaire (Hadamard)
+#   grid-contrast        contrast   + hybride  -> HP-STAtten-contrast (VCA-light)
+#   grid-statten         factorized + binaire  -> STAtten
+#   grid-sdt             sdt        + binaire  -> SDT pur (mask + add)
+#   grid-contrast-binary contrast   + binaire  -> contrast binaire
 # Chaque variante a son propre SAVE_DIR (checkpoints/logs séparés).
 # Override dataset/params : make grid-hp-linear DATASET=cifar10-dvs
 # ============================================================================
-.PHONY: grid-hp grid-hp-linear grid-statten grid-sdt grid-all grid-help \
-        grid-fresh-hp grid-fresh-hp-linear grid-fresh-statten grid-fresh-sdt \
-        reserve-grid-hp reserve-grid-hp-linear reserve-grid-statten reserve-grid-sdt
+.PHONY: grid-hp grid-hp-linear grid-contrast grid-statten grid-sdt grid-contrast-binary \
+        grid-all grid-help \
+        grid-fresh-hp grid-fresh-hp-linear grid-fresh-contrast \
+        grid-fresh-statten grid-fresh-sdt grid-fresh-contrast-binary \
+        reserve-grid-hp reserve-grid-hp-linear reserve-grid-contrast \
+        reserve-grid-statten reserve-grid-sdt reserve-grid-contrast-binary
 
 GRID_DIR := $(CURDIR)/save/grid
 # Args supplémentaires passés à scripts.train (ex: petit GPU local)
 #   make grid-hp-linear DATASET=cifar10-dvs EXTRA_ARGS="--batch-size 8 --T 8"
 EXTRA_ARGS ?=
 
-grid-hp:        SAVE_DIR := $(GRID_DIR)/hp_factorized_hybrid
-grid-hp:        GRID_ARGS := --attention-mode factorized --hybrid-qkv true
-grid-hp-linear: SAVE_DIR := $(GRID_DIR)/hp_sdt_hybrid
-grid-hp-linear: GRID_ARGS := --attention-mode sdt --hybrid-qkv true
-grid-statten:   SAVE_DIR := $(GRID_DIR)/statten_factorized_binary
-grid-statten:   GRID_ARGS := --attention-mode factorized --hybrid-qkv false
-grid-sdt:       SAVE_DIR := $(GRID_DIR)/sdt_binary
-grid-sdt:       GRID_ARGS := --attention-mode sdt --hybrid-qkv false
+grid-hp:              SAVE_DIR := $(GRID_DIR)/hp_factorized_hybrid
+grid-hp:              GRID_ARGS := --attention-mode factorized --hybrid-qkv true
+grid-hp-linear:       SAVE_DIR := $(GRID_DIR)/hp_sdt_hybrid
+grid-hp-linear:       GRID_ARGS := --attention-mode sdt --hybrid-qkv true
+grid-contrast:        SAVE_DIR := $(GRID_DIR)/hp_contrast_hybrid
+grid-contrast:        GRID_ARGS := --attention-mode contrast --hybrid-qkv true
+grid-statten:         SAVE_DIR := $(GRID_DIR)/statten_factorized_binary
+grid-statten:         GRID_ARGS := --attention-mode factorized --hybrid-qkv false
+grid-sdt:             SAVE_DIR := $(GRID_DIR)/sdt_binary
+grid-sdt:             GRID_ARGS := --attention-mode sdt --hybrid-qkv false
+grid-contrast-binary: SAVE_DIR := $(GRID_DIR)/contrast_binary
+grid-contrast-binary: GRID_ARGS := --attention-mode contrast --hybrid-qkv false
 
 define run_grid_train
 	@mkdir -p $(SAVE_DIR)
@@ -50,28 +59,35 @@ define run_grid_train
 		--data-dir $(DATA_DIR) --dataset $(DATASET) $(GRID_ARGS) $(1) $(EXTRA_ARGS)
 endef
 
-grid-hp grid-hp-linear grid-statten grid-sdt: check-deps
+grid-hp grid-hp-linear grid-contrast grid-statten grid-sdt grid-contrast-binary: check-deps
 	$(call run_grid_train,)
 
-grid-fresh-hp:        SAVE_DIR := $(GRID_DIR)/hp_factorized_hybrid
-grid-fresh-hp:        GRID_ARGS := --attention-mode factorized --hybrid-qkv true
-grid-fresh-hp-linear: SAVE_DIR := $(GRID_DIR)/hp_sdt_hybrid
-grid-fresh-hp-linear: GRID_ARGS := --attention-mode sdt --hybrid-qkv true
-grid-fresh-statten:   SAVE_DIR := $(GRID_DIR)/statten_factorized_binary
-grid-fresh-statten:   GRID_ARGS := --attention-mode factorized --hybrid-qkv false
-grid-fresh-sdt:       SAVE_DIR := $(GRID_DIR)/sdt_binary
-grid-fresh-sdt:       GRID_ARGS := --attention-mode sdt --hybrid-qkv false
+grid-fresh-hp:              SAVE_DIR := $(GRID_DIR)/hp_factorized_hybrid
+grid-fresh-hp:              GRID_ARGS := --attention-mode factorized --hybrid-qkv true
+grid-fresh-hp-linear:       SAVE_DIR := $(GRID_DIR)/hp_sdt_hybrid
+grid-fresh-hp-linear:       GRID_ARGS := --attention-mode sdt --hybrid-qkv true
+grid-fresh-contrast:        SAVE_DIR := $(GRID_DIR)/hp_contrast_hybrid
+grid-fresh-contrast:        GRID_ARGS := --attention-mode contrast --hybrid-qkv true
+grid-fresh-statten:         SAVE_DIR := $(GRID_DIR)/statten_factorized_binary
+grid-fresh-statten:         GRID_ARGS := --attention-mode factorized --hybrid-qkv false
+grid-fresh-sdt:             SAVE_DIR := $(GRID_DIR)/sdt_binary
+grid-fresh-sdt:             GRID_ARGS := --attention-mode sdt --hybrid-qkv false
+grid-fresh-contrast-binary: SAVE_DIR := $(GRID_DIR)/contrast_binary
+grid-fresh-contrast-binary: GRID_ARGS := --attention-mode contrast --hybrid-qkv false
 
-grid-fresh-hp grid-fresh-hp-linear grid-fresh-statten grid-fresh-sdt: check-deps
+grid-fresh-hp grid-fresh-hp-linear grid-fresh-contrast \
+grid-fresh-statten grid-fresh-sdt grid-fresh-contrast-binary: check-deps
 	$(call run_grid_train,--fresh)
 
-grid-all: grid-hp grid-hp-linear grid-statten grid-sdt
+grid-all: grid-hp grid-hp-linear grid-contrast grid-statten grid-sdt grid-contrast-binary
 
 # --- Grid5000 (batch OAR, un job par variante) ---
-reserve-grid-hp:        SAVE_DIR := $(GRID_DIR)/hp_factorized_hybrid
-reserve-grid-hp-linear: SAVE_DIR := $(GRID_DIR)/hp_sdt_hybrid
-reserve-grid-statten:   SAVE_DIR := $(GRID_DIR)/statten_factorized_binary
-reserve-grid-sdt:       SAVE_DIR := $(GRID_DIR)/sdt_binary
+reserve-grid-hp:              SAVE_DIR := $(GRID_DIR)/hp_factorized_hybrid
+reserve-grid-hp-linear:       SAVE_DIR := $(GRID_DIR)/hp_sdt_hybrid
+reserve-grid-contrast:        SAVE_DIR := $(GRID_DIR)/hp_contrast_hybrid
+reserve-grid-statten:         SAVE_DIR := $(GRID_DIR)/statten_factorized_binary
+reserve-grid-sdt:             SAVE_DIR := $(GRID_DIR)/sdt_binary
+reserve-grid-contrast-binary: SAVE_DIR := $(GRID_DIR)/contrast_binary
 
 reserve-grid-hp:
 	$(call write_oar_job_script,grid-hp)
@@ -81,6 +97,10 @@ reserve-grid-hp-linear:
 	$(call write_oar_job_script,grid-hp-linear)
 	$(call oarsub_batch_job,grid-hp-linear,$(OAR_JOB_NAME)_hplin)
 
+reserve-grid-contrast:
+	$(call write_oar_job_script,grid-contrast)
+	$(call oarsub_batch_job,grid-contrast,$(OAR_JOB_NAME)_contrast)
+
 reserve-grid-statten:
 	$(call write_oar_job_script,grid-statten)
 	$(call oarsub_batch_job,grid-statten,$(OAR_JOB_NAME)_statten)
@@ -88,6 +108,10 @@ reserve-grid-statten:
 reserve-grid-sdt:
 	$(call write_oar_job_script,grid-sdt)
 	$(call oarsub_batch_job,grid-sdt,$(OAR_JOB_NAME)_sdt)
+
+reserve-grid-contrast-binary:
+	$(call write_oar_job_script,grid-contrast-binary)
+	$(call oarsub_batch_job,grid-contrast-binary,$(OAR_JOB_NAME)_cbin)
 
 # ============================================================================
 # Optuna : optimisation d'hyperparamètres
@@ -225,13 +249,15 @@ ablation-lr-help:
 	@echo "  Résultats : save/ablation/lr/<variante>/metrics.jsonl + MLflow"
 
 grid-help:
-	@echo "Grille d'ablation (attention_mode x hybrid_qkv):"
-	@echo "  make grid-hp          factorized + hybride  (HP-STAtten, référence)"
-	@echo "  make grid-hp-linear   sdt + hybride         (HP-STAtten-linéaire, Hadamard)"
-	@echo "  make grid-statten     factorized + binaire  (STAtten)"
-	@echo "  make grid-sdt         sdt + binaire         (SDT pur, mask+add)"
-	@echo "  make grid-fresh-*     idem, from scratch (--fresh, ignore last.pt)"
-	@echo "  make grid-all         lance les 4 séquentiellement"
+	@echo "Grille d'ablation 3×2 (attention_mode x hybrid_qkv):"
+	@echo "  make grid-hp              factorized + hybride  (HP-STAtten, référence)"
+	@echo "  make grid-hp-linear       sdt + hybride         (HP-STAtten-linéaire, Hadamard)"
+	@echo "  make grid-contrast        contrast + hybride    (VCA-light différentiel)"
+	@echo "  make grid-statten         factorized + binaire  (STAtten)"
+	@echo "  make grid-sdt             sdt + binaire         (SDT pur, mask+add)"
+	@echo "  make grid-contrast-binary contrast + binaire    (contrast binaire)"
+	@echo "  make grid-fresh-*         idem, from scratch (--fresh, ignore last.pt)"
+	@echo "  make grid-all             lance les 6 séquentiellement"
 	@echo "  Config auto : DATASET=cifar10 → train_cifar10.yml | cifar10-dvs → train_cifar10-dvs.yml"
-	@echo "  Override : make grid-hp-linear DATASET=cifar10-dvs"
-	@echo "  Petit GPU: make grid-hp-linear DATASET=cifar10-dvs EXTRA_ARGS=\"--batch-size 8 --T 8\""
+	@echo "  Override : make grid-contrast DATASET=cifar10-dvs"
+	@echo "  Petit GPU: make grid-contrast EXTRA_ARGS=\"--batch-size 8 --T 8 --vct-num 16\""

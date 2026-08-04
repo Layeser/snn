@@ -1,5 +1,5 @@
-# Config orchestrateur — smoke test jour (~10 min walltime, 2 epochs).
-# Usage : make prepare-pilot-smoke && git push && make pilot-grid-smoke
+# Config orchestrateur — smoke AUTO (jour, file GPU complète).
+# Usage : make g5k-test-auto-smoke
 
 user: kasekou
 ssh_gateway: access.grid5000.fr
@@ -18,7 +18,7 @@ max_jobs_per_site: 8
 
 cluster_defaults_file: cluster_defaults_smoke.yaml
 
-walltime: "0:10:00"
+walltime: "0:25:00"
 oar_type: day
 oar_queue: default
 oar_resources: host=1/gpu=1

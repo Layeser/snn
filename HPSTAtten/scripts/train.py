@@ -76,7 +76,13 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
         "--attention-mode",
         type=str,
         default=config["attention_mode"],
-        choices=["factorized", "sdt"],
+        choices=["factorized", "sdt", "contrast"],
+    )
+    p.add_argument(
+        "--vct-num",
+        type=int,
+        default=16,
+        help="Nombre de tokens contraste (carré parfait, mode contrast uniquement)",
     )
     p.add_argument(
         "--membrane-block",
@@ -184,6 +190,7 @@ def main():
         T=args.T,
         attention_mode=args.attention_mode,
         membrane_block=membrane_block,
+        vct_num=args.vct_num,
     ).to(device)
 
     criterion = build_criterion(config)
@@ -221,6 +228,7 @@ def main():
             "lif_backend": lif_backend,
             "hybrid_qkv": hybrid_qkv,
             "attention_mode": args.attention_mode,
+            "vct_num": args.vct_num,
             "membrane_block": membrane_block,
             "tet_loss": config["tet_loss"],
             "tet_lamb": config["tet_lamb"],

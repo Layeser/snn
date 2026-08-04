@@ -68,7 +68,7 @@ remote_project_dir: internship/snn
 
 sites:
   - lille
-  - lyon          # ajoutez un 2e site pour 4 jobs parallèles
+  - lyon          # ajoutez un 2e site
 max_jobs_per_site: 2
 
 git_enabled: true
@@ -94,12 +94,14 @@ oar_queue: besteffort      # besteffort | default
 oar_resources: host=1/gpu=1
 ```
 
-| Champ | Rôle | Exemples |
-|-------|------|----------|
-| `oar_resources` | GPU / nœuds (`-l`) | `host=1/gpu=1` (1 GPU, mono-GPU) |
-| `oar_type` | Créneau horaire (`-t`) | `day`, `night` |
-| `oar_queue` | File OAR (`-q`) | `besteffort`, `default` |
-| `walltime` | Durée max du job | `"10:00:00"` |
+
+| Champ           | Rôle                   | Exemples                         |
+| --------------- | ---------------------- | -------------------------------- |
+| `oar_resources` | GPU / nœuds (`-l`)     | `host=1/gpu=1` (1 GPU, mono-GPU) |
+| `oar_type`      | Créneau horaire (`-t`) | `day`, `night`                   |
+| `oar_queue`     | File OAR (`-q`)        | `besteffort`, `default`          |
+| `walltime`      | Durée max du job       | `"10:00:00"`                     |
+
 
 **Basculer besteffort ↔ default** : une seule ligne à changer :
 

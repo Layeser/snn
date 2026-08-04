@@ -62,6 +62,7 @@ wandb/
 
 # --- Orchestrateur Grid'5000 (état runtime, file d'attente, résultats rapatriés) ---
 outputs/
+# scrip_run/lille|lyon : scripts de campagne (locaux, uploadés par g5k-auto via SCP)
 scrip_grid_5000/scrip_run/lille/
 scrip_grid_5000/scrip_run/lyon/
 scrip_grid_5000/scrip_run/archive/
@@ -71,6 +72,8 @@ scrip_grid_5000/sirius_experiences/*.sh
 scrip_grid_5000/chuc_experiences/*.sh
 scrip_grid_5000/chuc_experiences/archive/
 scrip_grid_5000/manual_jobs.env
+scrip_grid_5000/reserve_smoke.yaml
+scrip_grid_5000/.book_smoke.env
 scrip_grid_5000/pilot_grid/run_status.json
 
 assets/

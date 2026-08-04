@@ -431,11 +431,55 @@ def make_job(ssh_client, commande_soumission, site):
     return None
 
 
+def synchroniser_scripts_cluster(ssh_client, site: str, cluster: str, scripts_locaux: list[str]) -> bool:
+    """Envoie les scripts locaux vers scrip_run/<site>/<cluster>/ sur la frontale.
+
+    scrip_run/lille|lyon/ est gitignore : le git pull seul ne suffit pas.
+    """
+    if not scripts_locaux:
+        print(f"[Cluster] Aucun script local pour {site}/{cluster}")
+        return False
+
+    repo_root = os.path.dirname(os.path.dirname(_scripts_root_abs()))
+    rel_queue = os.path.join(CFG.local_scripts_root, site, cluster).replace("\\", "/")
+    remote_queue = CFG.remote_script_path(rel_queue)
+
+    print(f"[Cluster] Sync scripts → {remote_queue} ({len(scripts_locaux)} fichier(s))")
+    ssh_client.exec_command(f'mkdir -p "{remote_queue}"')
+    ssh_client.exec_command(f'rm -f "{remote_queue}"/*.sh')
+
+    ok = True
+    for chemin_local in scripts_locaux:
+        if not os.path.isabs(chemin_local):
+            candidat = os.path.join(repo_root, chemin_local)
+            chemin_local = candidat if os.path.isfile(candidat) else os.path.normpath(chemin_local)
+        if not os.path.isfile(chemin_local):
+            print(f"[Cluster] Script local introuvable : {chemin_local}")
+            ok = False
+            continue
+        rel = os.path.relpath(chemin_local, repo_root).replace("\\", "/")
+        chemin_distant = CFG.remote_script_path(rel)
+        if not televerser_fichier(ssh_client, chemin_local, chemin_distant):
+            ok = False
+            continue
+        ssh_client.exec_command(f'chmod +x "{chemin_distant}"')
+
+    if ok:
+        stdin, stdout, stderr = ssh_client.exec_command(f'ls -1 "{remote_queue}"/*.sh 2>/dev/null | wc -l')
+        nb = stdout.read().decode("utf-8").strip()
+        print(f"[Cluster] Frontale : {nb} script(s) dans {rel_queue}/")
+    return ok
+
+
 def etape1_cluster(ssh_client, site, cluster, rel_key, scripts_locaux, *, git_sync=True):
     """Soumet un job OAR par cluster ; la file GPU tourne sur le noeud."""
     print(f"--- ETAPE 1 : Job cluster {rel_key} ({len(scripts_locaux)} script(s)) ---")
 
     if git_sync and not synchroniser_git(ssh_client):
+        return None
+
+    if not synchroniser_scripts_cluster(ssh_client, site, cluster, scripts_locaux):
+        print(f"[Cluster] Echec sync scripts → oarsub annule pour {rel_key}")
         return None
 
     repo_root = os.path.dirname(os.path.dirname(_scripts_root_abs()))
