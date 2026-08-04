@@ -2,8 +2,9 @@
 # Prépare 10 smoke tests dans sirius_experiences/ :
 # 8 en parallèle (8× A100) + 2 en file d'attente.
 #
-# Usage (sur flyon ou en local avant git push) :
-#   ./scrip_grid_5000/prepare_sirius_smoke.sh
+# Usage (sur flyon) :
+#   make g5k-test-sirius
+#   # ou : bash scrip_grid_5000/prepare_sirius_smoke.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -42,10 +43,11 @@ done
 echo ""
 echo "File prête : 10 jobs → 8 en parallèle puis 2 en file."
 echo ""
-echo "Prochaines étapes sur flyon (Lyon) :"
-echo "  1) git pull"
-echo "  2) Réservation day (voir Notes/gpures_sirius.md)"
-echo "  3) bash scrip_grid_5000/run_sirius_queue.sh --job-id <JOB_ID>"
+echo "Prochaines etapes (mode MANUEL — sur flyon) :"
+echo "  oarsub -I -p sirius -t exotic -t day -l host=1/gpu=8,walltime=0:20:00 -q default"
+echo "  bash scrip_grid_5000/run_sirius_queue.sh"
+echo ""
+echo "Pour smoke AUTO sans intervention : make g5k-test-auto-smoke  (depuis votre PC)"
 echo ""
 echo "Suivi :"
 echo "  tail -f outputs/sirius_queue/scheduler.log"

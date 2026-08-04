@@ -29,17 +29,26 @@ PILOT_PYTHON := $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 PILOT_WATCH_INTERVAL ?= 300
 
 MANUAL_SCRIPT := $(SNN_ROOT)/scrip_grid_5000/run_manual_site.sh
+SYNC_SCRIP_SCRIPT := $(SNN_ROOT)/scrip_grid_5000/sync_scrip_run_local.sh
 RESERVE_SCRIPT := $(SNN_ROOT)/scrip_grid_5000/reserve_manual.sh
+RESERVE_SMOKE_CONFIG ?= $(SNN_ROOT)/scrip_grid_5000/reserve_smoke.yaml
+BOOK_SMOKE_SCRIPT := $(SNN_ROOT)/scrip_grid_5000/book_smoke_local.sh
 RESERVE_START ?=
 RESERVE_END ?=
 RESERVE_TAG ?= run
 
 .PHONY: help job-status setup setup-venv setup-g5k list-python-modules check-deps print-python interactive \
 	download-data download-cifar10 download-cifar10-dvs prepare-cifar10-dvs \
-	g5k-auto g5k-auto-follow g5k-auto-watch g5k-auto-restart g5k-auto-clean g5k-fresh g5k-auto-smoke g5k-auto-smoke-watch g5k-test-auto \
-	g5k-book-lille g5k-book-lyon g5k-run-lille g5k-run-lyon \
-	g5k-restart-lille g5k-restart-lyon g5k-clean-manual g5k-check-lille g5k-check-lyon \
-	g5k-test-chicoree g5k-test-sirius g5k-help \
+	g5k-auto g5k-auto-follow g5k-auto-watch g5k-auto-restart g5k-auto-clean g5k-fresh g5k-auto-smoke g5k-auto-smoke-watch g5k-test-auto g5k-test-auto-smoke \
+	g5k-book-lille g5k-book-lyon g5k-book-smoke g5k-book-smoke-check \
+	g5k-run-lille g5k-run-lyon g5k-run-lille-scrip g5k-run-lyon-scrip \
+	g5k-sync-scrip-run g5k-sync-scrip-run-check \
+	g5k-restart-lille g5k-restart-lyon g5k-clean-manual \
+	g5k-check-lille g5k-check-lyon g5k-check-lille-scrip g5k-check-lyon-scrip \
+	g5k-test-chicoree g5k-test-chuc g5k-test-sirius \
+	g5k-run-smoke-reserved-lille g5k-run-smoke-reserved-lyon \
+	g5k-run-smoke-reserved-lille-check g5k-run-smoke-reserved-lyon-check \
+	g5k-help \
 	pilot-grid pilot-grid-watch pilot-grid-fresh pilot-grid-clean grid-watch \
 	prepare-pilot-smoke pilot-grid-smoke pilot-grid-smoke-watch pilot-smoke \
 	manual-reserve-lille manual-reserve-lyon manual-run-lille manual-run-lyon \
@@ -153,14 +162,21 @@ g5k-help:
 	@echo "MANUEL (frontale) — dossiers chicoree_experiences/, chuc_experiences/, sirius_experiences/"
 	@echo "  g5k-book-lille        réserver chicorée + chuc  (flille)"
 	@echo "  g5k-book-lyon         réserver sirius           (flyon)"
-	@echo "  g5k-run-lille         lancer les files Lille"
+	@echo "  g5k-book-smoke        réserver smoke 3 clusters depuis le PC (reserve_smoke.yaml)"
+	@echo "  g5k-run-lille         lancer les files Lille (*_experiences/)"
+	@echo "  g5k-run-lille-scrip   lancer campagne réelle (scrip_run/ + job_id)"
+	@echo "  g5k-sync-scrip-run    envoyer scrip_run/ local → frontales (PC)"
 	@echo "  g5k-run-lyon          lancer la file Lyon"
 	@echo "  g5k-restart-lille     g5k-fresh + lancer Lille"
 	@echo "  g5k-restart-lyon      g5k-fresh + lancer Lyon"
 	@echo "  g5k-clean-manual      alias g5k-fresh --local"
 	@echo "  g5k-check-lille       afficher la file sans lancer"
 	@echo ""
-	@echo "Tests smoke (jour) : g5k-test-chicoree | g5k-test-sirius"
+	@echo "Tests smoke (jour) :"
+	@echo "  BOOK   make g5k-book-smoke              (PC local, reserve_smoke.yaml)"
+	@echo "  AUTO   make g5k-test-auto-smoke"
+	@echo "  MANUEL make g5k-test-chicoree | g5k-test-chuc | g5k-test-sirius  (flille / flyon)"
+	@echo "  RESERVE make g5k-run-smoke-reserved-lille | g5k-run-smoke-reserved-lyon  (créneau -r, sans nouvel oarsub)"
 	@echo ""
 	@echo "Variables réservation : RESERVE_START  RESERVE_END  RESERVE_TAG"
 	@echo "Doc : scrip_grid_5000/README.md"
@@ -188,6 +204,9 @@ g5k-fresh:
 g5k-test-auto:
 	bash $(SNN_ROOT)/scrip_grid_5000/prepare_pilot_smoke.sh
 
+g5k-test-auto-smoke: g5k-test-auto
+	PILOT_CONFIG=$(PILOT_CONFIG_SMOKE) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG_SMOKE)
+
 g5k-auto-smoke:
 	PILOT_CONFIG=$(PILOT_CONFIG_SMOKE) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG_SMOKE)
 
@@ -210,11 +229,29 @@ g5k-book-lyon:
 		SIRIUS_GPU="$(SIRIUS_GPU)" \
 		bash $(RESERVE_SCRIPT) lyon
 
+g5k-book-smoke:
+	RESERVE_SMOKE_CONFIG="$(RESERVE_SMOKE_CONFIG)" bash $(BOOK_SMOKE_SCRIPT)
+
+g5k-book-smoke-check:
+	RESERVE_SMOKE_CONFIG="$(RESERVE_SMOKE_CONFIG)" bash $(BOOK_SMOKE_SCRIPT) --dry-run
+
 g5k-run-lille:
 	bash $(MANUAL_SCRIPT) lille
 
+g5k-run-lille-scrip:
+	bash $(MANUAL_SCRIPT) lille --scrip-run
+
 g5k-run-lyon:
 	bash $(MANUAL_SCRIPT) lyon
+
+g5k-run-lyon-scrip:
+	bash $(MANUAL_SCRIPT) lyon --scrip-run
+
+g5k-sync-scrip-run:
+	bash $(SYNC_SCRIP_SCRIPT)
+
+g5k-sync-scrip-run-check:
+	bash $(SYNC_SCRIP_SCRIPT) --dry-run
 
 g5k-restart-lille: g5k-fresh
 	$(MAKE) g5k-run-lille
@@ -228,14 +265,35 @@ g5k-clean-manual:
 g5k-check-lille:
 	bash $(MANUAL_SCRIPT) lille --dry-run
 
+g5k-check-lille-scrip:
+	bash $(MANUAL_SCRIPT) lille --scrip-run --dry-run
+
 g5k-check-lyon:
 	bash $(MANUAL_SCRIPT) lyon --dry-run
+
+g5k-check-lyon-scrip:
+	bash $(MANUAL_SCRIPT) lyon --scrip-run --dry-run
 
 g5k-test-chicoree:
 	bash $(SNN_ROOT)/scrip_grid_5000/prepare_chicoree_smoke.sh
 
+g5k-test-chuc:
+	bash $(SNN_ROOT)/scrip_grid_5000/prepare_chuc_smoke.sh
+
 g5k-test-sirius:
 	bash $(SNN_ROOT)/scrip_grid_5000/prepare_sirius_smoke.sh
+
+g5k-run-smoke-reserved-lille:
+	bash $(SNN_ROOT)/scrip_grid_5000/run_smoke_reserved.sh lille
+
+g5k-run-smoke-reserved-lyon:
+	bash $(SNN_ROOT)/scrip_grid_5000/run_smoke_reserved.sh lyon
+
+g5k-run-smoke-reserved-lille-check:
+	bash $(SNN_ROOT)/scrip_grid_5000/run_smoke_reserved.sh lille --dry-run
+
+g5k-run-smoke-reserved-lyon-check:
+	bash $(SNN_ROOT)/scrip_grid_5000/run_smoke_reserved.sh lyon --dry-run
 
 # --- Alias anciens noms (compatibilité) ---
 
@@ -246,7 +304,7 @@ pilot-grid-clean: g5k-auto-clean
 prepare-pilot-smoke: g5k-test-auto
 pilot-grid-smoke: g5k-auto-smoke
 pilot-grid-smoke-watch: g5k-auto-smoke-watch
-pilot-smoke: g5k-test-auto g5k-auto-smoke
+pilot-smoke: g5k-test-auto-smoke
 manual-reserve-lille: g5k-book-lille
 manual-reserve-lyon: g5k-book-lyon
 manual-run-lille: g5k-run-lille
@@ -257,6 +315,7 @@ manual-fresh: g5k-clean-manual
 manual-dry-run-lille: g5k-check-lille
 manual-dry-run-lyon: g5k-check-lyon
 prepare-chicoree-smoke: g5k-test-chicoree
+prepare-chuc-smoke: g5k-test-chuc
 prepare-sirius-smoke: g5k-test-sirius
 
 # Réservation interactive GPU (frontale → shell sur nœud, puis make train-*)

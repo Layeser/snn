@@ -1,0 +1,25 @@
+# Copier en reserve_smoke.yaml et adapter le créneau.
+# Usage (PC local) : make g5k-book-smoke
+# Dry-run        : make g5k-book-smoke-check
+
+user: kasekou
+ssh_gateway: access.grid5000.fr
+remote_project_dir: internship/snn
+
+# Heure Grid'5000 (Europe/Paris)
+reserve_start: "2026-08-04 09:00:00"
+# Fin explicite OU laisser vide et utiliser duration_minutes
+reserve_end: "2026-08-04 09:20:00"
+duration_minutes: 20
+
+# Suffixe des noms de jobs OAR (hpstattn_chicoree_<tag>, …)
+tag: smoke04
+
+chicoree_gpu: 4
+chuc_gpu: 4
+sirius_gpu: 8
+
+# Types OAR pour créneau jour (smoke ~20 min)
+chicoree_oar_types: [exotic, day]
+chuc_oar_types: [day]
+sirius_oar_types: [exotic, day]

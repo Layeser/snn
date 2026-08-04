@@ -2,7 +2,7 @@
 # Nettoyage unifié scrip_grid_5000 — local et/ou frontales Grid'5000.
 #
 # Usage :
-#   bash scrip_grid_5000/g5k_fresh.sh              # local + flille + flyon
+#   bash scrip_grid_5000/g5k_fresh.sh              # local + frontales (sites config.yaml)
 #   bash scrip_grid_5000/g5k_fresh.sh --local    # cette machine seulement
 #   bash scrip_grid_5000/g5k_fresh.sh --remote    # frontales seulement (SSH)
 #
@@ -13,7 +13,7 @@
 #   - ne supprime PAS les .sh actifs dans scrip_run/ ni *_experiences/
 #
 # Effets (--remote, depuis le PC) :
-#   - git pull --ff-only + git restore scrip_grid_5000/ sur flille et flyon
+#   - git pull --ff-only + git restore scrip_grid_5000/ sur chaque site (lille, lyon, …)
 #   - puis le même nettoyage runtime sur chaque frontale
 set -euo pipefail
 
@@ -58,6 +58,29 @@ read_config() {
         echo "user et remote_project_dir requis dans $CONFIG" >&2
         exit 1
     }
+}
+
+read_frontend_sites() {
+    FRONTEND_SITES=()
+    local in_sites=0 line
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^sites:[[:space:]]*$ ]]; then
+            in_sites=1
+            continue
+        fi
+        if [[ $in_sites -eq 1 ]]; then
+            if [[ "$line" =~ ^[[:space:]]+-[[:space:]]+([^[:space:]]+) ]]; then
+                FRONTEND_SITES+=("${BASH_REMATCH[1]}")
+            elif [[ "$line" =~ ^[[:space:]]*$ ]]; then
+                continue
+            else
+                break
+            fi
+        fi
+    done < "$CONFIG"
+    if [[ ${#FRONTEND_SITES[@]} -eq 0 ]]; then
+        FRONTEND_SITES=(lille lyon)
+    fi
 }
 
 clean_runtime() {
@@ -140,7 +163,10 @@ sync_frontend() {
     echo ""
     echo ">>> Frontale ${host} (${G5K_USER})"
 
-    ssh -J "${SSH_GATEWAY}" -o BatchMode=yes "${G5K_USER}@${host}" bash -lc "
+    ssh -J "${G5K_USER}@${SSH_GATEWAY}" \
+        -o BatchMode=yes \
+        -o StrictHostKeyChecking=accept-new \
+        "${G5K_USER}@${host}" bash -lc "
         set -euo pipefail
         cd \"\$HOME/${REMOTE_PROJECT}\"
         echo '[git] fetch + pull ${GIT_BRANCH}...'
@@ -161,11 +187,13 @@ if [[ "$DO_LOCAL" -eq 1 ]]; then
 fi
 
 if [[ "$DO_REMOTE" -eq 1 ]]; then
+    read_frontend_sites
     echo "=== Synchronisation frontales (git + nettoyage) ==="
-    sync_frontend flille
-    sync_frontend flyon
+    for host in "${FRONTEND_SITES[@]}"; do
+        sync_frontend "$host"
+    done
     echo ""
-    echo "Frontales alignées sur origin/${GIT_BRANCH}."
+    echo "Frontales alignées sur origin/${GIT_BRANCH} (${FRONTEND_SITES[*]})."
 fi
 
 echo "=== g5k-fresh terminé ==="

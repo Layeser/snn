@@ -1,6 +1,10 @@
 # File d'attente — mode **auto** (`make g5k-auto`)
 
-Déposez vos scripts ici (un `.sh` par expérience) — **copie manuelle** depuis `experiences/` ou scripts perso :
+Déposez vos scripts ici (un `.sh` par expérience) — **copie manuelle** depuis `experiences/` :
+
+> **Note** : `scrip_run/lille/` et `lyon/` sont **gitignorés**.  
+> `make g5k-auto` **envoie vos `.sh` par SCP** sur la frontale avant chaque `oarsub`.  
+> Pas besoin de `git push` les scripts de campagne (seulement le code outils).
 
 ```
 scrip_run/

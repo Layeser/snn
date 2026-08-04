@@ -36,7 +36,8 @@ local_outputs_dir: outputs
 state_file: scrip_grid_5000/pilot_grid/run_status.json
 
 # --- Orchestration --------------------------------------------
-# Sites Grid'5000. File d'attente : scrip_run/<site>/<cluster>/*.sh
+# Sites Grid'5000 — noms d'hôtes SSH depuis access.grid5000.fr (comme make g5k-auto).
+# Shell une fois connecté : flille (Lille), flyon (Lyon).
 sites:
   - lille
   - lyon
