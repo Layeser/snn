@@ -40,6 +40,8 @@ class Config:
         self.walltime = data.get("walltime", "4:00:00")
         self.oar_queue = data.get("oar_queue", "besteffort")
         self.oar_resources = data.get("oar_resources", "host=1/gpu=1")
+        self.oar_types_lille = data.get("oar_types_lille", "exotic,night")
+        self.oar_types_lyon = data.get("oar_types_lyon", "exotic")
         self.state_file = data.get("state_file", "besteffort_state/run_status.json")
         self.local_outputs_dir = data.get("local_outputs_dir", "outputs")
         self.git_enabled = bool(data.get("git_enabled", True))
@@ -65,6 +67,11 @@ class Config:
     def outputs_dir(self) -> Path:
         p = Path(self.local_outputs_dir)
         return p if p.is_absolute() else REPO_ROOT / p
+
+    def oar_type_flags(self, site: str) -> str:
+        raw = getattr(self, f"oar_types_{site}", None) or "exotic,night"
+        types = [t.strip() for t in str(raw).split(",") if t.strip()]
+        return " ".join(f"-t {t}" for t in types)
 
 
 def load_config(path: Path) -> Config:
@@ -195,11 +202,12 @@ def oar_status(client, user: str, job_id: str) -> str:
     return "ABSENT"
 
 
-def oar_submit(client, cfg: Config, remote_script: str) -> str | None:
+def oar_submit(client, cfg: Config, remote_script: str, site: str) -> str | None:
     resources = f"{cfg.oar_resources},walltime={cfg.walltime}"
+    types = cfg.oar_type_flags(site)
     cmd = (
         f'cd "{cfg.remote_abs()}" && '
-        f'oarsub -q {cfg.oar_queue} -l "{resources}" '
+        f'oarsub -q {cfg.oar_queue} {types} -l "{resources}" '
         f'"{cfg.run_script()} {remote_script}"'
     )
     print(f"[OAR] {cmd}")
@@ -273,7 +281,7 @@ def submit_script(client, cfg: Config, site: str, key: str, local: Path, state: 
     if out_dir:
         ssh_run(client, f'mkdir -p "{out_dir}"')
 
-    job_id = oar_submit(client, cfg, remote)
+    job_id = oar_submit(client, cfg, remote, site)
     if not job_id:
         return state
 
@@ -332,7 +340,7 @@ def follow_script(client, cfg: Config, key: str, info: dict, state: dict) -> dic
         print(f"[{key}] Preemption → resoumission...")
         if out_dir:
             ssh_run(client, f'mkdir -p "{out_dir}"')
-        new_id = oar_submit(client, cfg, remote)
+        new_id = oar_submit(client, cfg, remote, site)
         if new_id:
             info.update({
                 "etape": "ETAPE_2",

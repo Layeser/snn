@@ -28,8 +28,12 @@ PILOT_CONFIG_SMOKE := $(SNN_ROOT)/scrip_grid_5000/pilot_grid/config_smoke.yaml
 PILOT_PYTHON := $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 PILOT_WATCH_INTERVAL ?= 300
 BESTEFFORT_PILOT := $(SNN_ROOT)/grid5k/besteffort_pilot.py
+BESTEFFORT_LOCAL := $(SNN_ROOT)/grid5k/besteffort_local.py
+BESTEFFORT_RUNNER := $(BESTEFFORT_LOCAL)
 BESTEFFORT_CONFIG := $(SNN_ROOT)/grid5k/config.yaml
 BESTEFFORT_WATCH_INTERVAL ?= 600
+# Python : stdlib only pour besteffort_local (pas besoin de paramiko sur la frontale)
+BESTEFFORT_PYTHON := $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 
 MANUAL_SCRIPT := $(SNN_ROOT)/scrip_grid_5000/run_manual_site.sh
 SYNC_SCRIP_SCRIPT := $(SNN_ROOT)/scrip_grid_5000/sync_scrip_run_local.sh
@@ -223,16 +227,20 @@ g5k-auto-smoke:
 g5k-auto-smoke-watch:
 	watch -n $(PILOT_WATCH_INTERVAL) "PILOT_CONFIG=$(PILOT_CONFIG_SMOKE) $(PILOT_PYTHON) $(PILOT_MAIN) --config $(PILOT_CONFIG_SMOKE)"
 
-# --- Besteffort (grid5k/ — indépendant de scrip_grid_5000) ---
+# --- Besteffort (grid5k/ — lancer sur la frontale flille/flyon) ---
 
 besteffort:
-	$(PILOT_PYTHON) $(BESTEFFORT_PILOT) --config $(BESTEFFORT_CONFIG) $(if $(BESTEFFORT_SITES),--sites $(BESTEFFORT_SITES),)
+	$(BESTEFFORT_PYTHON) $(BESTEFFORT_RUNNER) --config $(BESTEFFORT_CONFIG) $(if $(BESTEFFORT_SITES),--site $(BESTEFFORT_SITES),)
 
 besteffort-watch:
-	watch -n $(BESTEFFORT_WATCH_INTERVAL) "$(PILOT_PYTHON) $(BESTEFFORT_PILOT) --config $(BESTEFFORT_CONFIG) $(if $(BESTEFFORT_SITES),--sites $(BESTEFFORT_SITES),)"
+	watch -n $(BESTEFFORT_WATCH_INTERVAL) "$(BESTEFFORT_PYTHON) $(BESTEFFORT_RUNNER) --config $(BESTEFFORT_CONFIG) $(if $(BESTEFFORT_SITES),--site $(BESTEFFORT_SITES),)"
 
 besteffort-check:
-	$(PILOT_PYTHON) $(BESTEFFORT_PILOT) --config $(BESTEFFORT_CONFIG) --follow-only $(if $(BESTEFFORT_SITES),--sites $(BESTEFFORT_SITES),)
+	$(BESTEFFORT_PYTHON) $(BESTEFFORT_RUNNER) --config $(BESTEFFORT_CONFIG) --follow-only $(if $(BESTEFFORT_SITES),--site $(BESTEFFORT_SITES),)
+
+# Depuis PC local : pilote les deux sites via SSH (requiert paramiko)
+besteffort-remote:
+	$(PILOT_PYTHON) $(BESTEFFORT_PILOT) --config $(BESTEFFORT_CONFIG) $(if $(BESTEFFORT_SITES),--sites $(BESTEFFORT_SITES),)
 
 besteffort-fresh:
 	bash $(SNN_ROOT)/grid5k/fresh.sh
