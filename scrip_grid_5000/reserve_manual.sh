@@ -26,6 +26,9 @@ RESERVE_TAG="${RESERVE_TAG:-run}"
 CHICOREE_GPU="${CHICOREE_GPU:-4}"
 CHUC_GPU="${CHUC_GPU:-4}"
 SIRIUS_GPU="${SIRIUS_GPU:-8}"
+CHICOREE_OAR_TYPES="${CHICOREE_OAR_TYPES:-exotic}"
+CHUC_OAR_TYPES="${CHUC_OAR_TYPES:-}"
+SIRIUS_OAR_TYPES="${SIRIUS_OAR_TYPES:-exotic}"
 
 submit_job() {
     local var_name=$1 cluster=$2 gpu=$3 extra_types=$4 job_name=$5
@@ -51,6 +54,12 @@ submit_job() {
     job_id="$(grep -oE 'OAR_JOB_ID=[0-9]+' <<<"$result" | tail -1 | cut -d= -f2 || true)"
     if [[ -z "$job_id" ]]; then
         echo "Erreur : pas de OAR_JOB_ID pour ${cluster}." >&2
+        if grep -qi 'cannot have more than 2 waiting reservations' <<<"$result"; then
+            echo "" >&2
+            echo "Limite Grid'5000 : max 2 réservations en attente (état W)." >&2
+            echo "→ Utilisez vos réservations existantes : make g5k-run-smoke-reserved-lille|lyon" >&2
+            echo "→ Ou attendez qu'une réservation en attente expire / se termine." >&2
+        fi
         return 1
     fi
     echo "${var_name}=${job_id}" >>"$JOBS_FILE"
@@ -67,15 +76,15 @@ case "$SITE" in
         if [[ "$hostname_short" != "flille" ]]; then
             echo "Attention : lille doit être soumis depuis flille (actuel : ${hostname_short})." >&2
         fi
-        submit_job JOB_CHICOREE chicoree "$CHICOREE_GPU" "exotic" "hpstattn_chicoree_${RESERVE_TAG}"
-        submit_job JOB_CHUC chuc "$CHUC_GPU" "" "hpstattn_chuc_${RESERVE_TAG}"
+        submit_job JOB_CHICOREE chicoree "$CHICOREE_GPU" "$CHICOREE_OAR_TYPES" "hpstattn_chicoree_${RESERVE_TAG}"
+        submit_job JOB_CHUC chuc "$CHUC_GPU" "$CHUC_OAR_TYPES" "hpstattn_chuc_${RESERVE_TAG}"
         ;;
     lyon)
         hostname_short="$(hostname -s 2>/dev/null || hostname)"
         if [[ "$hostname_short" != "flyon" ]]; then
             echo "Attention : lyon doit être soumis depuis flyon (actuel : ${hostname_short})." >&2
         fi
-        submit_job JOB_SIRIUS sirius "$SIRIUS_GPU" "exotic" "hpstattn_sirius_${RESERVE_TAG}"
+        submit_job JOB_SIRIUS sirius "$SIRIUS_GPU" "$SIRIUS_OAR_TYPES" "hpstattn_sirius_${RESERVE_TAG}"
         ;;
     *)
         echo "Site inconnu : ${SITE} (lille|lyon)" >&2
