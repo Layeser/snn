@@ -45,7 +45,7 @@ DATASET_PROFILES: dict[str, DatasetProfile] = {
     "cifar10-dvs": DatasetProfile(
         name="cifar10-dvs",
         display_name="CIFAR-10-DVS",
-        img_size=128,
+        img_size=64,
         in_channels=2,
         num_classes=10,
         dvs=True,
@@ -66,19 +66,66 @@ def mlflow_experiment_name(project_prefix: str, dataset: str) -> str:
     return f"{project_prefix}-{profile.mlflow_label}"
 
 
-def dataset_hyperparams(dataset: str, data_dir: str | Path) -> dict[str, Any]:
+def option_a_variant_from_study(study_name: str) -> str | None:
+    """Extrait la variante Option A depuis un study_name Optuna (ex. hpstattn-cifar10-oa-hp → hp)."""
+    marker = "-oa-"
+    if marker in study_name:
+        return study_name.split(marker, 1)[1]
+    return None
+
+
+def mlflow_experiment_name_for_study(
+    project_prefix: str,
+    dataset: str,
+    study_name: str | None = None,
+    *,
+    mlflow_experiment: str | None = None,
+) -> str:
+    """Nom d'expérience MLflow ; une sous-expérience par variante Option A (-oa- dans study_name)."""
+    if mlflow_experiment:
+        return mlflow_experiment
+    base = mlflow_experiment_name(project_prefix, dataset)
+    if study_name:
+        variant = option_a_variant_from_study(study_name)
+        if variant:
+            return f"{base}-OptionA-{variant}"
+    return base
+
+
+def mlflow_experiment_name_from_option_a_config(
+    project_prefix: str,
+    dataset: str,
+    config_path: str | Path,
+) -> str | None:
+    """Déduit l'expérience Option A depuis config/campaigns/option_a/cifar10_<id>_best.yml."""
+    stem = Path(config_path).stem
+    prefix = "cifar10_"
+    suffix = "_best"
+    if stem.startswith(prefix) and stem.endswith(suffix):
+        variant = stem[len(prefix) : -len(suffix)]
+        base = mlflow_experiment_name(project_prefix, dataset)
+        return f"{base}-OptionA-{variant}"
+    return None
+
+
+def dataset_hyperparams(dataset: str, data_dir: str | Path, config: dict[str, Any] | None = None) -> dict[str, Any]:
     profile = get_dataset_profile(dataset)
     resolved = Path(data_dir).resolve()
-    return {
+    img_size = resolve_model_img_size(config, profile) if config is not None else profile.img_size
+    params = {
         "dataset": profile.name,
         "dataset_display_name": profile.display_name,
         "data_dir": str(resolved),
         "data_storage_path": str(resolved / profile.storage_subdir),
-        "img_size": profile.img_size,
+        "img_size": img_size,
         "in_channels": profile.in_channels,
         "num_classes": profile.num_classes,
         "dvs": profile.dvs,
     }
+    if config is not None and profile.dvs:
+        params["dvs_resize"] = config.get("dvs_resize", profile.img_size)
+        params["dvs_cutout"] = config.get("dvs_cutout", "true")
+    return params
 
 
 def dataset_split_params(train_loader, val_loader) -> dict[str, int]:
@@ -91,6 +138,15 @@ def dataset_split_params(train_loader, val_loader) -> dict[str, int]:
     }
 
 
+def resolve_model_img_size(config: dict[str, Any], profile: DatasetProfile) -> int:
+    """Taille spatiale effective passée au modèle (après resize DVS éventuel)."""
+    if not profile.dvs:
+        return profile.img_size
+    if "dvs_resize" in config and config["dvs_resize"] is not None:
+        return int(config["dvs_resize"])
+    return profile.img_size
+
+
 def loader_kwargs_for_dataset(config: dict[str, Any], profile: DatasetProfile) -> dict[str, Any]:
     if profile.name == "cifar10":
         return {
@@ -99,9 +155,14 @@ def loader_kwargs_for_dataset(config: dict[str, Any], profile: DatasetProfile) -
             "random_erasing": config["random_erasing"],
         }
     if profile.name == "cifar10-dvs":
+        dvs_resize = config.get("dvs_resize", profile.img_size)
+        if dvs_resize is not None:
+            dvs_resize = int(dvs_resize)
         return {
             "augment_train": config.get("dvs_augment", "true") == "true",
             "random_split": config.get("dvs_random_split", "false") == "true",
+            "dvs_resize": dvs_resize,
+            "dvs_cutout": config.get("dvs_cutout", "true") == "true",
         }
     return {}
 

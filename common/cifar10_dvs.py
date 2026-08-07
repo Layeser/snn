@@ -18,22 +18,19 @@ from torch.utils.data import DataLoader, Subset
 from cifar10 import _resolve_data_dir
 from cifar10_dvs_patch import apply_cifar10_dvs_numpy2_patch, prepare_cifar10_dvs_frames
 from data_subset import apply_train_fraction
-from dvs_augment import build_dvs_train_transform
+from dvs_augment import DvsResize, build_dvs_train_transform
 from reproducibility import dataloader_generator, seed_worker
 
 CIFAR10_DVS_NUM_CLASSES = 10
 CIFAR10_DVS_TRAIN_RATIO = 0.9
 
 
-class _AugmentedFrameDataset(torch.utils.data.Dataset):
-    """Applique une transform (augmentation DVS) à la volée sur les frames.
+class _FrameTransformDataset(torch.utils.data.Dataset):
+    """Applique resize (+ augmentation train optionnelle) sur les frames DVS."""
 
-    Chaque échantillon (T, C, H, W) est converti en tenseur float puis passé à
-    la transform. Utilisé uniquement pour le split train.
-    """
-
-    def __init__(self, base, transform):
+    def __init__(self, base, resize=None, transform=None):
         self.base = base
+        self.resize = resize
         self.transform = transform
 
     def __len__(self):
@@ -42,6 +39,8 @@ class _AugmentedFrameDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         frames, label = self.base[idx]
         frames = torch.as_tensor(frames, dtype=torch.float32)
+        if self.resize is not None:
+            frames = self.resize(frames)
         if self.transform is not None:
             frames = self.transform(frames)
         return frames, label
@@ -117,6 +116,8 @@ def get_cifar10_dvs_loaders(
     random_split: bool = False,
     train_fraction: float = 1.0,
     seed: int | None = None,
+    dvs_resize: int | None = 64,
+    dvs_cutout: bool = True,
 ):
     apply_cifar10_dvs_numpy2_patch()
 
@@ -156,9 +157,21 @@ def get_cifar10_dvs_loaders(
             f"({train_fraction:.1%}, stratifié, seed={seed})."
         )
 
+    resize = DvsResize(dvs_resize) if dvs_resize is not None else None
+    if dvs_resize is not None:
+        print(f"Redimensionnement DVS activé : frames 128×128 → {dvs_resize}×{dvs_resize} (recette STAtten/SDT).")
+
+    train_set = _FrameTransformDataset(
+        train_set,
+        resize=resize,
+        transform=build_dvs_train_transform(cutout=dvs_cutout) if augment_train else None,
+    )
+    val_set = _FrameTransformDataset(val_set, resize=resize, transform=None)
     if augment_train:
-        train_set = _AugmentedFrameDataset(train_set, build_dvs_train_transform())
-        print("Augmentation DVS activée (flip + SNNAugmentWide) sur le train.")
+        aug_msg = "flip + SNNAugmentWide"
+        if dvs_cutout:
+            aug_msg = "flip + Cutout + SNNAugmentWide"
+        print(f"Augmentation DVS activée ({aug_msg}) sur le train.")
 
     loader_kwargs = {
         "batch_size": batch_size,

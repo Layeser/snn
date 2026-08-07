@@ -21,13 +21,14 @@ import math
 from typing import List, Optional
 
 import torch
+import torch.nn.functional as nnf
 from torch import Tensor
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from torchvision.transforms import functional as F
 from torchvision.transforms.transforms import RandomErasing
 
-__all__ = ["SNNAugmentWide", "build_dvs_train_transform"]
+__all__ = ["SNNAugmentWide", "DvsResize", "DvsCutout", "build_dvs_train_transform"]
 
 
 def _apply_op(
@@ -66,6 +67,47 @@ def _apply_op(
     else:
         raise ValueError(f"Opérateur non reconnu: {op_name}")
     return img
+
+
+class DvsResize(torch.nn.Module):
+    """Redimensionne chaque frame (T, C, H, W) — recette STAtten/SDT (128 → 64)."""
+
+    def __init__(self, size: int = 64) -> None:
+        super().__init__()
+        self.size = size
+
+    def forward(self, img: Tensor) -> Tensor:
+        if img.dim() != 4:
+            raise ValueError(f"DvsResize attend (T, C, H, W), reçu {tuple(img.shape)}")
+        h, w = img.size(-2), img.size(-1)
+        if h == self.size and w == self.size:
+            return img
+        # (T, C, H, W) : chaque pas de temps est redimensionné indépendamment.
+        return nnf.interpolate(img, size=(self.size, self.size), mode="nearest")
+
+
+class DvsCutout(torch.nn.Module):
+    """Cutout spatial identique sur tous les pas de temps (STAtten: n_holes=1, length=16)."""
+
+    def __init__(self, n_holes: int = 1, length: int = 16) -> None:
+        super().__init__()
+        self.n_holes = n_holes
+        self.length = length
+
+    def forward(self, img: Tensor) -> Tensor:
+        if img.dim() != 4:
+            raise ValueError(f"DvsCutout attend (T, C, H, W), reçu {tuple(img.shape)}")
+        h, w = img.size(-2), img.size(-1)
+        out = img.clone()
+        for _ in range(self.n_holes):
+            y = int(torch.randint(0, h, (1,)).item())
+            x = int(torch.randint(0, w, (1,)).item())
+            y1 = max(0, y - self.length // 2)
+            y2 = min(h, y + self.length // 2)
+            x1 = max(0, x - self.length // 2)
+            x2 = min(w, x + self.length // 2)
+            out[..., y1:y2, x1:x2] = 0.0
+        return out
 
 
 class SNNAugmentWide(torch.nn.Module):
@@ -131,11 +173,12 @@ class SNNAugmentWide(torch.nn.Module):
         )
 
 
-def build_dvs_train_transform() -> transforms.Compose:
-    """Transform train pour frames DVS : flip horizontal + SNNAugmentWide."""
-    return transforms.Compose(
-        [
-            transforms.RandomHorizontalFlip(p=0.5),
-            SNNAugmentWide(),
-        ]
-    )
+def build_dvs_train_transform(*, cutout: bool = True) -> transforms.Compose:
+    """Transform train DVS : flip + Cutout (optionnel) + SNNAugmentWide."""
+    steps: list[torch.nn.Module | transforms.RandomHorizontalFlip] = [
+        transforms.RandomHorizontalFlip(p=0.5),
+    ]
+    if cutout:
+        steps.append(DvsCutout(n_holes=1, length=16))
+    steps.append(SNNAugmentWide())
+    return transforms.Compose(steps)

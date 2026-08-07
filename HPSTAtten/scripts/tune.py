@@ -40,10 +40,11 @@ import optuna
 
 from datasets import (
     dataset_hyperparams,
+    resolve_model_img_size,
     dataset_split_params,
     get_dataset_loaders,
     get_dataset_profile,
-    mlflow_experiment_name,
+    mlflow_experiment_name_for_study,
 )
 from models import HPSTAttenTransformer
 from modules.spike import resolve_lif_backend
@@ -55,6 +56,7 @@ from optuna_search import (
     summarize_study,
 )
 from reproducibility import set_seed
+from mlflow_tracking import optuna_run_name_prefix
 from train_integration import (
     apply_dataset_training_overrides,
     build_criterion,
@@ -98,6 +100,32 @@ def build_tune_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-pruning", action="store_true", help="Désactiver le MedianPruner")
     p.add_argument("--no-resume-interrupted", action="store_true",
                    help="Ne pas reprendre les essais Optuna laissés en RUNNING")
+    p.add_argument(
+        "--attention-mode",
+        type=str,
+        default=None,
+        choices=["factorized", "sdt", "contrast"],
+        help="Override attention_mode du config (ablation Option A)",
+    )
+    p.add_argument(
+        "--hybrid-qkv",
+        type=str,
+        default=None,
+        choices=["true", "false"],
+        help="Override hybrid_qkv du config (ablation Option A)",
+    )
+    p.add_argument(
+        "--mlflow-experiment",
+        type=str,
+        default=None,
+        help="Nom d'expérience MLflow (défaut : HP-STAtten-CIFAR10 ou HP-STAtten-CIFAR10-OptionA-<variante>)",
+    )
+    p.add_argument(
+        "--vct-num",
+        type=int,
+        default=16,
+        help="Tokens contraste (mode contrast uniquement)",
+    )
     return p
 
 
@@ -151,6 +179,10 @@ def main() -> None:
         HPSTATTEN_CONFIG_SCHEMA,
         extra_validators=[validate_hpstattn_config],
     )
+    if tune_args.attention_mode is not None:
+        base_config["attention_mode"] = tune_args.attention_mode
+    if tune_args.hybrid_qkv is not None:
+        base_config["hybrid_qkv"] = tune_args.hybrid_qkv
 
     dataset = tune_args.dataset or base_config["dataset"]
     data_dir = resolve_project_path(tune_args.data_dir or base_config["data_dir"], ROOT)
@@ -193,9 +225,15 @@ def main() -> None:
         use_pruner=not tune_args.no_pruning,
     )
     base_save_dir = Path(resolve_project_path(tune_args.save_dir or "save/optuna", ROOT))
-    experiment_name = mlflow_experiment_name(MLFLOW_PROJECT_PREFIX, dataset)
+    experiment_name = mlflow_experiment_name_for_study(
+        MLFLOW_PROJECT_PREFIX,
+        dataset,
+        study_name,
+        mlflow_experiment=tune_args.mlflow_experiment,
+    )
 
     print(f"Étude Optuna: {study_name}")
+    print(f"MLflow experiment: {experiment_name}")
     print(f"Storage: {storage}")
     print(f"Dataset: {profile.display_name} | batch={batch_size} T={T} | device={device} AMP={use_amp}")
     print(f"Seed: {tune_args.seed} | train_fraction: {tune_args.train_fraction}")
@@ -205,6 +243,7 @@ def main() -> None:
     lif_backend = resolve_lif_backend(base_config["lif_backend"])
     hybrid_qkv = base_config["hybrid_qkv"] == "true"
     attention_mode = base_config["attention_mode"]
+    vct_num = tune_args.vct_num
 
     study_dir = base_save_dir / study_name
 
@@ -218,7 +257,7 @@ def main() -> None:
         trial_config["use_amp"] = use_amp
 
         model = HPSTAttenTransformer(
-            img_size=profile.img_size,
+            img_size=resolve_model_img_size(trial_config, profile),
             in_channels=profile.in_channels,
             num_classes=profile.num_classes,
             embed_dim=params["embed_dim"],
@@ -232,6 +271,7 @@ def main() -> None:
             dvs=profile.dvs,
             T=T,
             attention_mode=attention_mode,
+            vct_num=vct_num,
         ).to(device)
 
         criterion = build_criterion(trial_config)
@@ -273,7 +313,7 @@ def main() -> None:
             save_dir=save_dir,
             experiment_name=experiment_name,
             hyperparams={
-                **dataset_hyperparams(dataset, data_dir),
+                **dataset_hyperparams(dataset, data_dir, trial_config),
                 **dataset_split_params(train_loader, val_loader),
                 "optuna_trial": trial.number,
                 "optuna_study": study_name,
@@ -296,7 +336,12 @@ def main() -> None:
             },
             train_one_epoch=train_one_epoch,
             validate=validate,
-            run_name_prefix=f"optuna-t{trial.number}",
+            run_name_prefix=optuna_run_name_prefix(
+                study_name=study_name,
+                trial_number=trial.number,
+                attention_mode=attention_mode,
+                hybrid_qkv=hybrid_qkv,
+            ),
             project_root=ROOT,
             epoch_callback=epoch_callback,
         )

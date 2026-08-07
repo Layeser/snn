@@ -1,7 +1,7 @@
 # CIFAR-10-DVS — diagnostic stabilité LR fixe sur 1/3 du train (stratifié, seed=42)
 # Scheduler désactivé pour isoler l'effet du learning rate.
 
-epochs: 100
+epochs: 30
 batch_size: 8
 learning_rate: 5.0e-4
 weight_decay: 0.06

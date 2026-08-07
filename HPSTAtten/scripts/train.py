@@ -31,6 +31,9 @@ from datasets import (
     get_dataset_loaders,
     get_dataset_profile,
     mlflow_experiment_name,
+    mlflow_experiment_name_for_study,
+    mlflow_experiment_name_from_option_a_config,
+    resolve_model_img_size,
 )
 from models import HPSTAttenTransformer
 from modules.spike import resolve_lif_backend
@@ -107,6 +110,12 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
         default=1.0,
         help="Fraction stratifiée du train à utiliser (ex: 0.333 pour 1/3)",
     )
+    p.add_argument(
+        "--mlflow-experiment",
+        type=str,
+        default=None,
+        help="Nom d'expérience MLflow (auto Option A si config campaigns/option_a/)",
+    )
     add_checkpoint_args(p)
     return p
 
@@ -160,6 +169,16 @@ def main():
         f"tet_loss={config['tet_loss']}"
     )
 
+    if args.mlflow_experiment:
+        experiment_name = args.mlflow_experiment
+    else:
+        experiment_name = mlflow_experiment_name_from_option_a_config(
+            MLFLOW_PROJECT_PREFIX, args.dataset, args.config
+        )
+        if experiment_name is None:
+            experiment_name = mlflow_experiment_name(MLFLOW_PROJECT_PREFIX, args.dataset)
+    print(f"MLflow experiment: {experiment_name}")
+
     train_loader, val_loader = get_dataset_loaders(
         dataset=args.dataset,
         data_dir=args.data_dir,
@@ -175,7 +194,7 @@ def main():
     print(f"Train batches: {len(train_loader)} | Val batches: {len(val_loader)}")
 
     model = HPSTAttenTransformer(
-        img_size=profile.img_size,
+        img_size=resolve_model_img_size(config, profile),
         in_channels=profile.in_channels,
         num_classes=profile.num_classes,
         embed_dim=args.embed_dim,
@@ -210,9 +229,9 @@ def main():
         config=config,
         args=args,
         save_dir=save_dir,
-        experiment_name=mlflow_experiment_name(MLFLOW_PROJECT_PREFIX, args.dataset),
+        experiment_name=experiment_name,
         hyperparams={
-            **dataset_hyperparams(args.dataset, args.data_dir),
+            **dataset_hyperparams(args.dataset, args.data_dir, config),
             **dataset_split_params(train_loader, val_loader),
             "epochs": args.epochs,
             "batch_size": batch_size,

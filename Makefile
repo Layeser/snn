@@ -50,6 +50,7 @@ RESERVE_TAG ?= run
 	besteffort besteffort-watch besteffort-check besteffort-fresh \
 	besteffort-lille besteffort-lyon besteffort-watch-lille besteffort-watch-lyon \
 	besteffort-list besteffort-check-lille besteffort-check-lyon \
+	besteffort-cleanup besteffort-cleanup-apply besteffort-reconcile \
 	g5k-book-lille g5k-book-lyon g5k-book-smoke g5k-book-smoke-check \
 	g5k-run-lille g5k-run-lyon g5k-run-lille-scrip g5k-run-lyon-scrip \
 	g5k-sync-scrip-run g5k-sync-scrip-run-check \
@@ -266,6 +267,18 @@ besteffort-list:
 	@echo ""
 	@echo "=== besteffort_lyon/ ==="
 	@ls -1 besteffort_lyon/*.sh 2>/dev/null || echo "  (vide)"
+	@echo ""
+	@echo "=== run_status.json (job_ids actifs) ==="
+	@python3 -c "import json; s=json.load(open('besteffort_state/run_status.json')); [print(f'  {k}: job {v.get(\"job_id\",\"?\")} ({v.get(\"statut_oar\",v.get(\"etape\",\"?\"))})') for k,v in sorted(s.items()) if v.get('job_id')]" 2>/dev/null || echo "  (vide)"
+
+besteffort-cleanup:
+	$(BESTEFFORT_PYTHON) $(BESTEFFORT_RUNNER) --config $(BESTEFFORT_CONFIG) --site $(or $(BESTEFFORT_SITES),lille) --cleanup
+
+besteffort-cleanup-apply:
+	$(BESTEFFORT_PYTHON) $(BESTEFFORT_RUNNER) --config $(BESTEFFORT_CONFIG) --site $(or $(BESTEFFORT_SITES),lille) --cleanup-apply
+
+besteffort-reconcile:
+	bash $(SNN_ROOT)/grid5k/reconcile_state.sh $(or $(BESTEFFORT_SITES),lille)
 
 # --- Mode manuel ---
 

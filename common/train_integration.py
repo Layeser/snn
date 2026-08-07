@@ -68,7 +68,7 @@ def resolve_learning_rate(
         return learning_rate
     if "learning_rate_dvs" in config:
         return float(config["learning_rate_dvs"])
-    ref_batch = int(config.get("batch_size", 64))
+    ref_batch = int(config.get("batch_size_dvs", config.get("batch_size", 64)))
     scaled = learning_rate * (batch_size / ref_batch)
     if abs(scaled - learning_rate) > 1e-12:
         print(
@@ -86,7 +86,7 @@ def resolve_training_batch_size(
     """Réduit le batch pour CIFAR-10-DVS (128×128) afin d'éviter l'OOM GPU."""
     if not profile.temporal_input:
         return batch_size
-    cap = int(config.get("batch_size_dvs", 16))
+    cap = int(config.get("batch_size_dvs", 16 if profile.img_size <= 64 else 16))
     if batch_size > cap:
         print(
             f"Batch size réduit {batch_size} → {cap} pour {profile.display_name} "

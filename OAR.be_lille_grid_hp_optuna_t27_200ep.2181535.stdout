@@ -1,0 +1,507 @@
+=== Lancement experience ===
+Projet : /home/kasekou/internship/snn
+Script : /home/kasekou/internship/snn/besteffort_lille/grid_hp_optuna_t27_200ep.sh
+Config validée: /home/kasekou/internship/snn/HPSTAtten/config/train_cifar10.yml
+Dataset: CIFAR-10 (cifar10)
+Device: cuda
+Data dir: /home/kasekou/internship/snn/data
+AMP: True
+DataLoader workers: 0
+Seed: 42 | train_fraction: 1.0
+LIF backend: cupy (config lif_backend=auto)
+Hyperparamètres: epochs=200, batch_size=32, lr=0.001298944498363822, embed_dim=256, depth=2, T=4, chunk_size=2, hybrid_qkv=True, attention_mode=factorized, membrane_block=False, tet_loss=false
+CIFAR-10 déjà présent → /home/kasekou/internship/snn/data/cifar-10-batches-py
+Train batches: 1563 | Val batches: 313
+MLflow store: /home/kasekou/internship/snn/HPSTAtten/mlflow.db (sqlite, versionné) | artefacts: mlruns/ (hors git)
+Reprise depuis checkpoint: /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/last.pt
+  → epoch 45/200 | best val acc 90.41% (epoch 42)
+
+--- Epoch 46/200 ---
+Epoch 046/200 | train loss 1.0699 acc 52.85% | val loss 0.9028 acc 90.09%
+
+--- Epoch 47/200 ---
+Epoch 047/200 | train loss 1.0580 acc 53.93% | val loss 0.9187 acc 89.82%
+
+--- Epoch 48/200 ---
+Epoch 048/200 | train loss 1.0597 acc 53.90% | val loss 0.8937 acc 90.64%
+  → meilleur modèle sauvegardé (90.64%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 49/200 ---
+Epoch 049/200 | train loss 1.0445 acc 52.40% | val loss 0.9015 acc 90.71%
+  → meilleur modèle sauvegardé (90.71%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 50/200 ---
+Epoch 050/200 | train loss 1.0532 acc 53.78% | val loss 0.8961 acc 90.68%
+
+--- Epoch 51/200 ---
+Epoch 051/200 | train loss 1.0351 acc 52.69% | val loss 0.9023 acc 90.34%
+
+--- Epoch 52/200 ---
+Epoch 052/200 | train loss 1.0468 acc 53.06% | val loss 0.9015 acc 90.49%
+
+--- Epoch 53/200 ---
+Epoch 053/200 | train loss 1.0402 acc 53.60% | val loss 0.9016 acc 90.53%
+
+--- Epoch 54/200 ---
+Epoch 054/200 | train loss 1.0363 acc 51.32% | val loss 0.8967 acc 90.93%
+  → meilleur modèle sauvegardé (90.93%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 55/200 ---
+Epoch 055/200 | train loss 1.0299 acc 54.19% | val loss 0.8896 acc 90.93%
+
+--- Epoch 56/200 ---
+Epoch 056/200 | train loss 1.0549 acc 53.41% | val loss 0.9043 acc 90.97%
+  → meilleur modèle sauvegardé (90.97%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 57/200 ---
+Epoch 057/200 | train loss 1.0404 acc 53.76% | val loss 0.9021 acc 90.74%
+
+--- Epoch 58/200 ---
+Epoch 058/200 | train loss 1.0355 acc 54.35% | val loss 0.8894 acc 90.99%
+  → meilleur modèle sauvegardé (90.99%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 59/200 ---
+Epoch 059/200 | train loss 1.0408 acc 53.71% | val loss 0.9016 acc 90.53%
+
+--- Epoch 60/200 ---
+Epoch 060/200 | train loss 1.0229 acc 54.68% | val loss 0.8888 acc 91.01%
+  → meilleur modèle sauvegardé (91.01%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 61/200 ---
+Epoch 061/200 | train loss 1.0215 acc 52.90% | val loss 0.8938 acc 90.76%
+
+--- Epoch 62/200 ---
+Epoch 062/200 | train loss 1.0348 acc 53.22% | val loss 0.8951 acc 91.01%
+
+--- Epoch 63/200 ---
+Epoch 063/200 | train loss 1.0156 acc 52.43% | val loss 0.8897 acc 91.27%
+  → meilleur modèle sauvegardé (91.27%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 64/200 ---
+Epoch 064/200 | train loss 1.0261 acc 54.03% | val loss 0.8887 acc 91.15%
+
+--- Epoch 65/200 ---
+Epoch 065/200 | train loss 1.0251 acc 54.98% | val loss 0.8922 acc 90.92%
+
+--- Epoch 66/200 ---
+Epoch 066/200 | train loss 1.0238 acc 54.97% | val loss 0.8935 acc 91.13%
+
+--- Epoch 67/200 ---
+Epoch 067/200 | train loss 1.0080 acc 52.57% | val loss 0.8845 acc 91.25%
+
+--- Epoch 68/200 ---
+Epoch 068/200 | train loss 1.0112 acc 53.02% | val loss 0.8867 acc 91.06%
+
+--- Epoch 69/200 ---
+Epoch 069/200 | train loss 1.0265 acc 52.49% | val loss 0.8874 acc 91.13%
+
+--- Epoch 70/200 ---
+Epoch 070/200 | train loss 1.0078 acc 55.72% | val loss 0.8862 acc 91.38%
+  → meilleur modèle sauvegardé (91.38%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 71/200 ---
+Epoch 071/200 | train loss 1.0241 acc 54.33% | val loss 0.8824 acc 91.23%
+
+--- Epoch 72/200 ---
+Epoch 072/200 | train loss 1.0218 acc 52.91% | val loss 0.8917 acc 90.87%
+
+--- Epoch 73/200 ---
+Epoch 073/200 | train loss 1.0224 acc 54.38% | val loss 0.8859 acc 91.31%
+
+--- Epoch 74/200 ---
+Epoch 074/200 | train loss 1.0227 acc 53.83% | val loss 0.8907 acc 91.17%
+
+--- Epoch 75/200 ---
+Epoch 075/200 | train loss 1.0219 acc 53.60% | val loss 0.8839 acc 91.46%
+  → meilleur modèle sauvegardé (91.46%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 76/200 ---
+Epoch 076/200 | train loss 1.0229 acc 54.85% | val loss 0.8955 acc 90.98%
+
+--- Epoch 77/200 ---
+Epoch 077/200 | train loss 1.0126 acc 54.31% | val loss 0.8858 acc 91.31%
+
+--- Epoch 78/200 ---
+Epoch 078/200 | train loss 1.0015 acc 53.08% | val loss 0.8823 acc 91.35%
+
+--- Epoch 79/200 ---
+Epoch 079/200 | train loss 1.0072 acc 54.95% | val loss 0.8843 acc 91.58%
+  → meilleur modèle sauvegardé (91.58%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 80/200 ---
+Epoch 080/200 | train loss 0.9976 acc 54.28% | val loss 0.8706 acc 92.03%
+  → meilleur modèle sauvegardé (92.03%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 81/200 ---
+Epoch 081/200 | train loss 0.9962 acc 54.96% | val loss 0.8707 acc 92.10%
+  → meilleur modèle sauvegardé (92.10%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 82/200 ---
+Epoch 082/200 | train loss 1.0071 acc 55.24% | val loss 0.8727 acc 91.74%
+
+--- Epoch 83/200 ---
+Epoch 083/200 | train loss 0.9930 acc 54.14% | val loss 0.8925 acc 91.31%
+
+--- Epoch 84/200 ---
+Epoch 084/200 | train loss 0.9889 acc 53.80% | val loss 0.8927 acc 91.05%
+
+--- Epoch 85/200 ---
+Epoch 085/200 | train loss 0.9999 acc 56.47% | val loss 0.8711 acc 91.96%
+
+--- Epoch 86/200 ---
+Epoch 086/200 | train loss 1.0006 acc 53.93% | val loss 0.8875 acc 91.54%
+
+--- Epoch 87/200 ---
+Epoch 087/200 | train loss 0.9983 acc 54.75% | val loss 0.8766 acc 91.79%
+
+--- Epoch 88/200 ---
+Epoch 088/200 | train loss 0.9928 acc 54.70% | val loss 0.8763 acc 91.57%
+
+--- Epoch 89/200 ---
+Epoch 089/200 | train loss 1.0052 acc 54.66% | val loss 0.8772 acc 91.49%
+
+--- Epoch 90/200 ---
+Epoch 090/200 | train loss 1.0003 acc 55.84% | val loss 0.8918 acc 91.66%
+
+--- Epoch 91/200 ---
+Epoch 091/200 | train loss 0.9995 acc 53.78% | val loss 0.8784 acc 91.35%
+
+--- Epoch 92/200 ---
+Epoch 092/200 | train loss 0.9810 acc 54.74% | val loss 0.8961 acc 91.33%
+
+--- Epoch 93/200 ---
+Epoch 093/200 | train loss 0.9984 acc 53.79% | val loss 0.8773 acc 91.99%
+
+--- Epoch 94/200 ---
+Epoch 094/200 | train loss 1.0065 acc 52.85% | val loss 0.8782 acc 91.53%
+
+--- Epoch 95/200 ---
+Epoch 095/200 | train loss 0.9964 acc 53.48% | val loss 0.8779 acc 91.95%
+
+--- Epoch 96/200 ---
+Epoch 096/200 | train loss 0.9902 acc 55.39% | val loss 0.8758 acc 91.79%
+
+--- Epoch 97/200 ---
+Epoch 097/200 | train loss 0.9874 acc 55.20% | val loss 0.8714 acc 92.12%
+  → meilleur modèle sauvegardé (92.12%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 98/200 ---
+Epoch 098/200 | train loss 0.9800 acc 54.40% | val loss 0.8690 acc 91.90%
+
+--- Epoch 99/200 ---
+Epoch 099/200 | train loss 0.9907 acc 53.98% | val loss 0.8686 acc 92.00%
+
+--- Epoch 100/200 ---
+Epoch 100/200 | train loss 0.9804 acc 53.57% | val loss 0.8807 acc 92.07%
+
+--- Epoch 101/200 ---
+Epoch 101/200 | train loss 0.9891 acc 55.63% | val loss 0.8742 acc 91.93%
+
+--- Epoch 102/200 ---
+Epoch 102/200 | train loss 0.9846 acc 55.10% | val loss 0.8815 acc 91.68%
+
+--- Epoch 103/200 ---
+Epoch 103/200 | train loss 0.9841 acc 53.84% | val loss 0.8747 acc 91.77%
+
+--- Epoch 104/200 ---
+Epoch 104/200 | train loss 0.9896 acc 55.31% | val loss 0.8703 acc 92.24%
+  → meilleur modèle sauvegardé (92.24%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 105/200 ---
+Epoch 105/200 | train loss 0.9929 acc 54.74% | val loss 0.8746 acc 92.14%
+
+--- Epoch 106/200 ---
+Epoch 106/200 | train loss 0.9888 acc 55.07% | val loss 0.8795 acc 91.96%
+
+--- Epoch 107/200 ---
+Epoch 107/200 | train loss 0.9752 acc 55.53% | val loss 0.8705 acc 92.34%
+  → meilleur modèle sauvegardé (92.34%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 108/200 ---
+Epoch 108/200 | train loss 0.9876 acc 56.55% | val loss 0.8717 acc 92.14%
+
+--- Epoch 109/200 ---
+Epoch 109/200 | train loss 0.9836 acc 55.16% | val loss 0.8664 acc 92.26%
+
+--- Epoch 110/200 ---
+Epoch 110/200 | train loss 0.9722 acc 55.58% | val loss 0.8799 acc 92.04%
+
+--- Epoch 111/200 ---
+Epoch 111/200 | train loss 0.9720 acc 53.72% | val loss 0.8837 acc 92.21%
+
+--- Epoch 112/200 ---
+Epoch 112/200 | train loss 0.9751 acc 53.08% | val loss 0.8784 acc 91.95%
+
+--- Epoch 113/200 ---
+Epoch 113/200 | train loss 0.9926 acc 55.02% | val loss 0.8707 acc 91.98%
+
+--- Epoch 114/200 ---
+Epoch 114/200 | train loss 0.9833 acc 55.63% | val loss 0.8814 acc 91.92%
+
+--- Epoch 115/200 ---
+Epoch 115/200 | train loss 0.9928 acc 55.09% | val loss 0.8871 acc 91.97%
+
+--- Epoch 116/200 ---
+Epoch 116/200 | train loss 0.9861 acc 53.28% | val loss 0.8726 acc 92.23%
+
+--- Epoch 117/200 ---
+Epoch 117/200 | train loss 0.9671 acc 53.63% | val loss 0.8656 acc 92.14%
+
+--- Epoch 118/200 ---
+Epoch 118/200 | train loss 0.9682 acc 55.27% | val loss 0.8624 acc 92.23%
+
+--- Epoch 119/200 ---
+Epoch 119/200 | train loss 0.9693 acc 53.44% | val loss 0.8771 acc 91.86%
+
+--- Epoch 120/200 ---
+Epoch 120/200 | train loss 0.9770 acc 54.70% | val loss 0.8680 acc 92.16%
+
+--- Epoch 121/200 ---
+Epoch 121/200 | train loss 0.9747 acc 54.24% | val loss 0.8947 acc 91.77%
+
+--- Epoch 122/200 ---
+Epoch 122/200 | train loss 0.9797 acc 56.33% | val loss 0.8890 acc 91.68%
+
+--- Epoch 123/200 ---
+Epoch 123/200 | train loss 0.9676 acc 56.70% | val loss 0.8688 acc 92.33%
+
+--- Epoch 124/200 ---
+Epoch 124/200 | train loss 0.9743 acc 55.49% | val loss 0.8852 acc 92.02%
+
+--- Epoch 125/200 ---
+Epoch 125/200 | train loss 0.9726 acc 55.74% | val loss 0.8728 acc 92.20%
+
+--- Epoch 126/200 ---
+Epoch 126/200 | train loss 0.9709 acc 55.75% | val loss 0.8667 acc 92.26%
+
+--- Epoch 127/200 ---
+Epoch 127/200 | train loss 0.9843 acc 54.71% | val loss 0.8628 acc 92.31%
+
+--- Epoch 128/200 ---
+Epoch 128/200 | train loss 0.9628 acc 57.57% | val loss 0.8748 acc 92.37%
+  → meilleur modèle sauvegardé (92.37%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 129/200 ---
+Epoch 129/200 | train loss 0.9769 acc 54.90% | val loss 0.8748 acc 92.15%
+
+--- Epoch 130/200 ---
+Epoch 130/200 | train loss 0.9427 acc 54.30% | val loss 0.8610 acc 92.56%
+  → meilleur modèle sauvegardé (92.56%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 131/200 ---
+Epoch 131/200 | train loss 0.9831 acc 55.29% | val loss 0.8668 acc 92.08%
+
+--- Epoch 132/200 ---
+Epoch 132/200 | train loss 0.9607 acc 54.88% | val loss 0.8684 acc 92.17%
+
+--- Epoch 133/200 ---
+Epoch 133/200 | train loss 0.9762 acc 53.88% | val loss 0.8636 acc 92.33%
+
+--- Epoch 134/200 ---
+Epoch 134/200 | train loss 0.9775 acc 54.46% | val loss 0.8694 acc 92.15%
+
+--- Epoch 135/200 ---
+Epoch 135/200 | train loss 0.9601 acc 55.45% | val loss 0.8577 acc 92.53%
+
+--- Epoch 136/200 ---
+Epoch 136/200 | train loss 0.9843 acc 55.69% | val loss 0.8579 acc 92.81%
+  → meilleur modèle sauvegardé (92.81%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 137/200 ---
+Epoch 137/200 | train loss 0.9678 acc 55.31% | val loss 0.8695 acc 92.38%
+
+--- Epoch 138/200 ---
+Epoch 138/200 | train loss 0.9769 acc 54.58% | val loss 0.8687 acc 92.59%
+
+--- Epoch 139/200 ---
+Epoch 139/200 | train loss 0.9622 acc 56.02% | val loss 0.8615 acc 92.35%
+
+--- Epoch 140/200 ---
+Epoch 140/200 | train loss 0.9585 acc 55.29% | val loss 0.8616 acc 92.96%
+  → meilleur modèle sauvegardé (92.96%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 141/200 ---
+Epoch 141/200 | train loss 0.9878 acc 55.60% | val loss 0.8671 acc 92.36%
+
+--- Epoch 142/200 ---
+Epoch 142/200 | train loss 0.9623 acc 56.22% | val loss 0.8581 acc 92.79%
+
+--- Epoch 143/200 ---
+Epoch 143/200 | train loss 0.9677 acc 54.96% | val loss 0.8790 acc 92.03%
+
+--- Epoch 144/200 ---
+Epoch 144/200 | train loss 0.9714 acc 55.52% | val loss 0.8584 acc 92.73%
+
+--- Epoch 145/200 ---
+Epoch 145/200 | train loss 0.9494 acc 55.47% | val loss 0.8608 acc 92.56%
+
+--- Epoch 146/200 ---
+Epoch 146/200 | train loss 0.9655 acc 55.68% | val loss 0.8688 acc 92.45%
+
+--- Epoch 147/200 ---
+Epoch 147/200 | train loss 0.9767 acc 55.58% | val loss 0.8664 acc 92.34%
+
+--- Epoch 148/200 ---
+Epoch 148/200 | train loss 0.9678 acc 55.80% | val loss 0.8636 acc 92.44%
+
+--- Epoch 149/200 ---
+Epoch 149/200 | train loss 0.9429 acc 55.86% | val loss 0.8647 acc 92.73%
+
+--- Epoch 150/200 ---
+Epoch 150/200 | train loss 0.9829 acc 55.41% | val loss 0.8646 acc 92.41%
+
+--- Epoch 151/200 ---
+Epoch 151/200 | train loss 0.9787 acc 55.06% | val loss 0.8602 acc 92.43%
+
+--- Epoch 152/200 ---
+Epoch 152/200 | train loss 0.9573 acc 55.92% | val loss 0.8661 acc 92.71%
+
+--- Epoch 153/200 ---
+Epoch 153/200 | train loss 0.9904 acc 55.16% | val loss 0.8609 acc 92.76%
+
+--- Epoch 154/200 ---
+Epoch 154/200 | train loss 0.9699 acc 55.44% | val loss 0.8692 acc 92.56%
+
+--- Epoch 155/200 ---
+Epoch 155/200 | train loss 0.9773 acc 54.65% | val loss 0.8584 acc 92.63%
+
+--- Epoch 156/200 ---
+Epoch 156/200 | train loss 0.9539 acc 55.71% | val loss 0.8649 acc 92.60%
+
+--- Epoch 157/200 ---
+Epoch 157/200 | train loss 0.9668 acc 54.68% | val loss 0.8574 acc 92.95%
+
+--- Epoch 158/200 ---
+Epoch 158/200 | train loss 0.9725 acc 55.68% | val loss 0.8665 acc 92.75%
+
+--- Epoch 159/200 ---
+Epoch 159/200 | train loss 0.9680 acc 54.48% | val loss 0.8610 acc 92.67%
+
+--- Epoch 160/200 ---
+Epoch 160/200 | train loss 0.9727 acc 53.78% | val loss 0.8629 acc 92.56%
+
+--- Epoch 161/200 ---
+Epoch 161/200 | train loss 0.9625 acc 54.99% | val loss 0.8709 acc 92.49%
+
+--- Epoch 162/200 ---
+Epoch 162/200 | train loss 0.9500 acc 55.65% | val loss 0.8730 acc 92.81%
+
+--- Epoch 163/200 ---
+Epoch 163/200 | train loss 0.9581 acc 55.41% | val loss 0.8528 acc 92.84%
+
+--- Epoch 164/200 ---
+Epoch 164/200 | train loss 0.9621 acc 54.16% | val loss 0.8613 acc 92.67%
+
+--- Epoch 165/200 ---
+Epoch 165/200 | train loss 0.9515 acc 52.45% | val loss 0.8575 acc 92.92%
+
+--- Epoch 166/200 ---
+Epoch 166/200 | train loss 0.9858 acc 55.22% | val loss 0.8558 acc 92.79%
+
+--- Epoch 167/200 ---
+Epoch 167/200 | train loss 0.9626 acc 55.99% | val loss 0.8625 acc 92.45%
+
+--- Epoch 168/200 ---
+Epoch 168/200 | train loss 0.9658 acc 55.81% | val loss 0.8519 acc 93.11%
+  → meilleur modèle sauvegardé (93.11%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 169/200 ---
+Epoch 169/200 | train loss 0.9641 acc 55.32% | val loss 0.8588 acc 92.63%
+
+--- Epoch 170/200 ---
+Epoch 170/200 | train loss 0.9738 acc 56.75% | val loss 0.8580 acc 92.98%
+
+--- Epoch 171/200 ---
+Epoch 171/200 | train loss 0.9655 acc 54.00% | val loss 0.8592 acc 92.73%
+
+--- Epoch 172/200 ---
+Epoch 172/200 | train loss 0.9528 acc 55.12% | val loss 0.8478 acc 93.31%
+  → meilleur modèle sauvegardé (93.31%) → /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt
+
+--- Epoch 173/200 ---
+Epoch 173/200 | train loss 0.9552 acc 54.56% | val loss 0.8588 acc 92.91%
+
+--- Epoch 174/200 ---
+Epoch 174/200 | train loss 0.9638 acc 53.64% | val loss 0.8531 acc 92.93%
+
+--- Epoch 175/200 ---
+Epoch 175/200 | train loss 0.9600 acc 55.92% | val loss 0.8569 acc 92.67%
+
+--- Epoch 176/200 ---
+Epoch 176/200 | train loss 0.9508 acc 53.25% | val loss 0.8509 acc 93.03%
+
+--- Epoch 177/200 ---
+Epoch 177/200 | train loss 0.9474 acc 55.71% | val loss 0.8544 acc 92.73%
+
+--- Epoch 178/200 ---
+Epoch 178/200 | train loss 0.9679 acc 55.21% | val loss 0.8580 acc 93.04%
+
+--- Epoch 179/200 ---
+Epoch 179/200 | train loss 0.9455 acc 55.90% | val loss 0.8539 acc 92.94%
+
+--- Epoch 180/200 ---
+Epoch 180/200 | train loss 0.9526 acc 55.28% | val loss 0.8588 acc 92.81%
+
+--- Epoch 181/200 ---
+Epoch 181/200 | train loss 0.9477 acc 54.41% | val loss 0.8583 acc 92.91%
+
+--- Epoch 182/200 ---
+Epoch 182/200 | train loss 0.9507 acc 55.60% | val loss 0.8505 acc 92.86%
+
+--- Epoch 183/200 ---
+Epoch 183/200 | train loss 0.9616 acc 56.91% | val loss 0.8576 acc 92.62%
+
+--- Epoch 184/200 ---
+Epoch 184/200 | train loss 0.9677 acc 55.80% | val loss 0.8767 acc 92.73%
+
+--- Epoch 185/200 ---
+Epoch 185/200 | train loss 0.9628 acc 54.75% | val loss 0.8577 acc 92.75%
+
+--- Epoch 186/200 ---
+Epoch 186/200 | train loss 0.9546 acc 56.16% | val loss 0.8553 acc 92.81%
+
+--- Epoch 187/200 ---
+Epoch 187/200 | train loss 0.9511 acc 53.55% | val loss 0.8519 acc 93.07%
+
+--- Epoch 188/200 ---
+Epoch 188/200 | train loss 0.9524 acc 55.40% | val loss 0.8643 acc 92.91%
+
+--- Epoch 189/200 ---
+Epoch 189/200 | train loss 0.9566 acc 54.71% | val loss 0.8595 acc 92.68%
+
+--- Epoch 190/200 ---
+Epoch 190/200 | train loss 0.9658 acc 53.69% | val loss 0.8607 acc 92.66%
+
+--- Epoch 191/200 ---
+Epoch 191/200 | train loss 0.9610 acc 55.09% | val loss 0.8607 acc 92.85%
+
+--- Epoch 192/200 ---
+Epoch 192/200 | train loss 0.9500 acc 55.21% | val loss 0.8566 acc 92.76%
+
+--- Epoch 193/200 ---
+Epoch 193/200 | train loss 0.9660 acc 55.96% | val loss 0.8535 acc 92.98%
+
+--- Epoch 194/200 ---
+Epoch 194/200 | train loss 0.9656 acc 56.11% | val loss 0.8581 acc 92.87%
+
+--- Epoch 195/200 ---
+Epoch 195/200 | train loss 0.9615 acc 53.49% | val loss 0.8632 acc 92.74%
+
+--- Epoch 196/200 ---
+Epoch 196/200 | train loss 0.9551 acc 53.73% | val loss 0.8581 acc 93.04%
+
+--- Epoch 197/200 ---
+Epoch 197/200 | train loss 0.9716 acc 55.03% | val loss 0.8579 acc 92.95%
+
+--- Epoch 198/200 ---
+Epoch 198/200 | train loss 0.9688 acc 54.55% | val loss 0.8588 acc 92.92%
+
+--- Epoch 199/200 ---
+Epoch 199/200 | train loss 0.9655 acc 56.19% | val loss 0.8600 acc 92.66%
+
+--- Epoch 200/200 ---
+Epoch 200/200 | train loss 0.9602 acc 56.82% | val loss 0.8615 acc 92.78%
+Entraînement terminé. Meilleure val accuracy: 93.31% (epoch 172)
+Checkpoints: /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/last.pt (dernier) | /home/kasekou/internship/snn/HPSTAtten/save/cifar10_grid_hp_optuna_t27_200ep/best.pt (meilleur)
+MLflow experiment: HP-STAtten-CIFAR10
+=== EXPERIENCE TERMINEE AVEC SUCCES ===

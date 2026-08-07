@@ -1,35 +1,41 @@
-# CIFAR-10-DVS (événements 128×128, T=16, TET activé)
+# CIFAR-10-DVS — recette alignée STAtten/SDT officielle
+# Réf. : STAtten conf/cifar10-dvs/2_256_200E_t16_TET.yml
+#        https://github.com/Intelligent-Computing-Lab-Panda/STAtten
 # Sélection auto : make train DATASET=cifar10-dvs
 
 epochs: 200
-batch_size: 32
-learning_rate: 5.0e-4
-weight_decay: 0.06
+batch_size: 16
+batch_size_dvs: 16
+learning_rate: 0.01
+learning_rate_dvs: 0.01
+weight_decay: 0.0001
 emb_dim: 256
 depth: 2
 num_heads: 8
 T: 16
-chunk_size: 2
-num_workers: 0
+chunk_size: 4
+num_workers: 8
 pooling_stat: "0011"
 spike_mode: lif
 lif_backend: auto
-hybrid_qkv: "true"
+hybrid_qkv: "false"
 attention_mode: factorized
 membrane_block: "false"
 tet_loss: "true"
-tet_lamb: 0.0
+tet_lamb: 0.001
 tet_means: 1.0
+dvs_resize: 64
+dvs_cutout: "true"
 dvs_augment: "true"
 dvs_random_split: "false"
 augment_train: "true"
 rand_augment: "true"
 random_erasing: 0.25
-mixup: 0.5
+mixup: 0.0
 label_smoothing: 0.1
 scheduler: cosine
-warmup_epochs: 20
-min_lr: 1.0e-5
+warmup_epochs: 10
+min_lr: 0.0003
 scheduler_step_size: 30
 scheduler_gamma: 0.5
 scheduler_patience: 4

@@ -8,6 +8,11 @@ import yaml
 
 Schema = dict[str, tuple[type, str | None]]
 
+# Clés optionnelles (surtout DVS) autorisées sans être dans le schéma principal.
+OPTIONAL_CONFIG_KEYS = frozenset(
+    {"dvs_resize", "dvs_cutout", "learning_rate_dvs", "batch_size_dvs", "mixup_off_epoch"}
+)
+
 
 def _check_constraint(value: Any, constraint: str | None, key: str) -> None:
     if constraint == "positive" and value <= 0:
@@ -36,7 +41,7 @@ def load_and_validate_config(
     if missing:
         raise ValueError(f"Clés manquantes dans {config_path}: {missing}")
 
-    unknown = [k for k in raw if k not in schema]
+    unknown = [k for k in raw if k not in schema and k not in OPTIONAL_CONFIG_KEYS]
     if unknown:
         raise ValueError(f"Clés inconnues dans {config_path}: {unknown}")
 
@@ -78,6 +83,10 @@ def load_and_validate_config(
 
         _check_constraint(value, constraint, key)
         config[key] = value
+
+    for key in OPTIONAL_CONFIG_KEYS:
+        if key in raw:
+            config[key] = raw[key]
 
     for validator in extra_validators or []:
         validator(config)

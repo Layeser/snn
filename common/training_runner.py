@@ -123,6 +123,20 @@ def run_training(
     tags = {"resumed": resume_tag}
     if "dataset" in hyperparams:
         tags["dataset"] = str(hyperparams["dataset"])
+    if "optuna_study" in hyperparams:
+        study = str(hyperparams["optuna_study"])
+        tags["optuna_study"] = study
+        tags["optuna_trial"] = str(hyperparams.get("optuna_trial", ""))
+        if "-oa-" in study:
+            tags["campaign"] = "option_a"
+            variant = study.split("-oa-", 1)[1]
+            tags["option_a_variant"] = variant
+        if "attention_mode" in hyperparams:
+            tags["attention_mode"] = str(hyperparams["attention_mode"])
+        if "hybrid_qkv" in hyperparams:
+            tags["hybrid_qkv"] = str(hyperparams["hybrid_qkv"])
+        if "train_fraction" in hyperparams:
+            tags["train_fraction"] = str(hyperparams["train_fraction"])
 
     latest_state_holder: dict[str, Any] = {"state": None}
 
@@ -142,17 +156,19 @@ def run_training(
     with start_training_run(
         experiment_name,
         run_id=mlflow_run_id,
-        run_name=None if mlflow_run_id else default_run_name(run_name_prefix),
+        run_name=default_run_name(run_name_prefix),
         tags=tags,
-    ) as active_run_id:
-        if start_epoch == 0:
+    ) as (active_run_id, continuing_mlflow_run):
+        if not continuing_mlflow_run:
             log_hyperparameters(
                 {
                     **hyperparams,
-                    "resume_mode": "fresh" if getattr(args, "fresh", False) else getattr(args, "resume", "auto"),
+                    "resume_mode": "fresh"
+                    if getattr(args, "fresh", False)
+                    else getattr(args, "resume", "auto"),
                 }
             )
-        else:
+        if start_epoch > 0:
             mlflow.set_tag("resumed_from_epoch", str(start_epoch))
 
         for epoch in range(start_epoch + 1, args.epochs + 1):

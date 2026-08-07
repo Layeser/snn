@@ -29,7 +29,16 @@ make besteffort-watch-lyon     # Lyon seulement
 make besteffort-watch          # les deux sites
 ```
 
-**Aucune liste de noms en dur** : l'orchestrateur découvre tous les `*.sh` à chaque cycle. Ajoutez ou retirez des scripts quand vous voulez ; au prochain cycle (10 min), les nouveaux sont soumis.
+**Aucune liste de noms en dur** : déposez/retirez des `.sh` → le prochain cycle adapte.
+
+**Règle** : 1 expérience = 1 job OAR max. Resoumission **uniquement** si préemption (`KILLED`), pas si en file (`Waiting`).
+
+Nettoyer les doublons accumulés :
+```bash
+make besteffort-reconcile BESTEFFORT_SITES=lille
+make besteffort-cleanup BESTEFFORT_SITES=lille          # dry-run
+make besteffort-cleanup-apply BESTEFFORT_SITES=lille    # oardel orphelins
+```
 
 ```bash
 make besteffort-list           # voir la file locale

@@ -170,17 +170,89 @@ def configure_tracking(
 
 
 def setup_experiment(experiment_name: str) -> None:
-    if (
-        _ARTIFACT_LOCATION is not None
-        and mlflow.get_experiment_by_name(experiment_name) is None
-    ):
-        mlflow.create_experiment(experiment_name, artifact_location=_ARTIFACT_LOCATION)
+    client = mlflow.tracking.MlflowClient()
+    exp = mlflow.get_experiment_by_name(experiment_name)
+    if exp is not None and exp.lifecycle_stage == "deleted":
+        print(f"MLflow: experiment « {experiment_name} » supprimé — restauration.")
+        client.restore_experiment(exp.experiment_id)
+    elif exp is None:
+        kwargs: dict[str, str] = {}
+        if _ARTIFACT_LOCATION is not None:
+            kwargs["artifact_location"] = _ARTIFACT_LOCATION
+        client.create_experiment(experiment_name, **kwargs)
     mlflow.set_experiment(experiment_name)
 
 
 def default_run_name(prefix: str) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     return f"{prefix}-{stamp}"
+
+
+def optuna_study_slug(study_name: str) -> str:
+    """Raccourci lisible pour MLflow (ex. hpstattn-cifar10-oa-hp → oa-hp)."""
+    marker = "-oa-"
+    if marker in study_name:
+        return "oa-" + study_name.split(marker, 1)[1]
+    parts = study_name.split("-")
+    if len(parts) >= 2 and parts[0] == "hpstattn":
+        return "-".join(parts[1:])
+    return study_name
+
+
+def optuna_run_name_prefix(
+    *,
+    study_name: str,
+    trial_number: int,
+    attention_mode: str | None = None,
+    hybrid_qkv: bool | None = None,
+) -> str:
+    """Préfixe de run MLflow pour un essai Optuna (horodatage ajouté par default_run_name)."""
+    slug = optuna_study_slug(study_name)
+    attn_short = {
+        "factorized": "fac",
+        "sdt": "sdt",
+        "contrast": "con",
+    }.get(attention_mode or "", "att")
+    if hybrid_qkv is True:
+        qkv_short = "hyb"
+    elif hybrid_qkv is False:
+        qkv_short = "bin"
+    else:
+        qkv_short = "qkv"
+    return f"optuna-{slug}-{attn_short}-{qkv_short}-t{trial_number:02d}"
+
+
+def _resolve_resume_run_id(
+    run_id: str | None,
+    *,
+    experiment_name: str | None = None,
+) -> str | None:
+    """Retourne run_id s'il est encore actif et dans le bon experiment, sinon None."""
+    if not run_id:
+        return None
+    try:
+        client = mlflow.tracking.MlflowClient()
+        run = client.get_run(run_id)
+        if run.info.lifecycle_stage == "deleted":
+            print(
+                f"MLflow: run {run_id} supprimé — reprise modèle/optimizer, nouveau run."
+            )
+            return None
+        if experiment_name is not None:
+            exp = mlflow.get_experiment_by_name(experiment_name)
+            if exp is None or run.info.experiment_id != exp.experiment_id:
+                print(
+                    f"MLflow: run {run_id} hors experiment « {experiment_name} » "
+                    f"— reprise modèle/optimizer, nouveau run."
+                )
+                return None
+        return run_id
+    except mlflow.exceptions.MlflowException as exc:
+        print(
+            f"MLflow: run {run_id} inaccessible ({exc}) — "
+            "reprise modèle/optimizer, nouveau run."
+        )
+        return None
 
 
 @contextmanager
@@ -190,22 +262,26 @@ def start_training_run(
     run_id: str | None = None,
     run_name: str | None = None,
     tags: dict[str, str] | None = None,
-) -> Iterator[str]:
+) -> Iterator[tuple[str, bool]]:
+    """Contexte MLflow. Yield (run_id, continuing_existing_run)."""
     setup_experiment(experiment_name)
+    requested_run_id = run_id
+    run_id = _resolve_resume_run_id(run_id, experiment_name=experiment_name)
+    continuing_existing_run = run_id is not None and run_id == requested_run_id
     if run_id:
         with mlflow.start_run(run_id=run_id):
             if tags:
                 mlflow.set_tags(tags)
             active = mlflow.active_run()
             assert active is not None
-            yield active.info.run_id
+            yield active.info.run_id, continuing_existing_run
     else:
         with mlflow.start_run(run_name=run_name):
             if tags:
                 mlflow.set_tags(tags)
             active = mlflow.active_run()
             assert active is not None
-            yield active.info.run_id
+            yield active.info.run_id, False
 
 
 def log_hyperparameters(params: dict) -> None:

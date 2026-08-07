@@ -90,6 +90,17 @@ def validate_hpstattn_config(config: dict[str, Any]) -> None:
         raise ValueError(
             f"dvs_random_split doit être 'true' ou 'false' (reçu: {config['dvs_random_split']!r})"
         )
+    if config["dataset"] == "cifar10-dvs":
+        dvs_cutout = config.get("dvs_cutout", "true")
+        if dvs_cutout not in ("true", "false"):
+            raise ValueError(f"dvs_cutout doit être 'true' ou 'false' (reçu: {dvs_cutout!r})")
+        if "dvs_resize" in config and config["dvs_resize"] is not None:
+            if int(config["dvs_resize"]) <= 0:
+                raise ValueError(f"dvs_resize doit être > 0 (reçu: {config['dvs_resize']})")
+        if "learning_rate_dvs" in config and float(config["learning_rate_dvs"]) <= 0:
+            raise ValueError(f"learning_rate_dvs doit être > 0 (reçu: {config['learning_rate_dvs']})")
+        if "batch_size_dvs" in config and int(config["batch_size_dvs"]) <= 0:
+            raise ValueError(f"batch_size_dvs doit être > 0 (reçu: {config['batch_size_dvs']})")
     if config["device"] is not None and config["device"] not in ("cuda", "cpu"):
         raise ValueError(f"'device' doit être 'cuda' ou 'cpu' (reçu: {config['device']!r})")
     validate_training_recipe(config)
