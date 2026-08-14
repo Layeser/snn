@@ -16,6 +16,14 @@ spike_mode: lif
 lif_backend: auto
 hybrid_qkv: "true"
 attention_mode: factorized
+window_size: 0
+window_shift: "false"
+mix_rank: 0
+num_landmarks: 0
+hgr_lambda: 0.1
+hgr_diag_gate: "true"
+hgr_trace_gate: "true"
+mk_dual_scale: "true"
 membrane_block: "false"
 tet_loss: "false"
 tet_lamb: 0.0

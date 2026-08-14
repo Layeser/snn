@@ -2,12 +2,13 @@ import torch
 import torch.nn as nn
 
 from modules.contrast_attn import ContrastTokenMixer
+from modules.factorized_mixing import chunked_factorized_mix, window_factorized_mix
 from modules.spike import make_lif
 from modules.ternary_lif import MultiStepTernaryLIFNode
 
 __all__ = ["HPSTAtten"]
 
-_ATTENTION_MODES = ("factorized", "sdt", "contrast")
+_ATTENTION_MODES = ("factorized", "factorized_hgr", "mk_hgr", "sdt", "contrast", "contrast_sdt")
 
 
 class DvsPooling(nn.Module):
@@ -26,7 +27,7 @@ class HPSTAtten(nn.Module):
     Fusion :
       - STAtten : chunks temporels + factorisation A = K^T V, out = Q @ A
       - A²OS²A  : Q binaire (LIF), K float (ReLU), V ternaire (TernaryLIF), SN final
-      - Modes   : factorized | sdt | contrast (VCA-light sans Softmax)
+      - Modes   : factorized | factorized_hgr | mk_hgr | sdt | contrast | contrast_sdt
 
     Entrée  : (T, B, D, H, W)
     Sortie  : (T, B, D, H, W)
@@ -46,12 +47,30 @@ class HPSTAtten(nn.Module):
         layer=0,
         attention_mode="factorized",
         vct_num=16,
+        window_size=0,
+        window_shift=False,
+        mix_rank=0,
+        num_landmarks=0,
+        hgr_lambda=0.1,
+        hgr_diag_gate=True,
+        hgr_trace_gate=True,
+        mk_dual_scale=True,
     ):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} must be divisible by num_heads {num_heads}"
         assert attention_mode in _ATTENTION_MODES, (
             f"attention_mode doit être l'un de {_ATTENTION_MODES} (reçu: {attention_mode!r})"
         )
+        complexity_active = window_size > 0 or mix_rank > 0 or num_landmarks > 0
+        if complexity_active and attention_mode not in ("factorized", "factorized_hgr"):
+            raise ValueError(
+                "window_size / mix_rank / num_landmarks ne s'appliquent qu'à "
+                "attention_mode='factorized' ou 'factorized_hgr'"
+            )
+        if attention_mode == "mk_hgr":
+            raise ValueError(
+                "attention_mode='mk_hgr' utilise MKHPSTAtten — instancié depuis models.py, pas HPSTAtten"
+            )
 
         self.dim = dim
         self.num_heads = num_heads
@@ -61,6 +80,13 @@ class HPSTAtten(nn.Module):
         self.layer = layer
         self.attention_mode = attention_mode
         self.vct_num = vct_num
+        self.window_size = window_size
+        self.window_shift = window_shift
+        self.mix_rank = mix_rank
+        self.num_landmarks = num_landmarks
+        self.hgr_lambda = hgr_lambda
+        self.hgr_diag_gate = hgr_diag_gate
+        self.hgr_trace_gate = hgr_trace_gate
 
         if dvs:
             self.pool = DvsPooling()
@@ -92,20 +118,48 @@ class HPSTAtten(nn.Module):
         if attention_mode == "sdt":
             self.talking_heads_lif = lif(v_threshold=0.5)
 
-        # Visual-Contrast (VCA-inspired, sans Softmax). Modules créés uniquement
-        # en mode "contrast" pour préserver la compatibilité des checkpoints.
-        if attention_mode == "contrast":
+        # Visual-Contrast (VCA-inspired, sans Softmax). Modules créés pour
+        # contrast (agrégation KᵀV) et contrast_sdt (agrégation Σ K⊙V).
+        if attention_mode in ("contrast", "contrast_sdt"):
             head_dim = dim // num_heads
             self.contrast_mixer = ContrastTokenMixer(
                 num_heads=num_heads,
                 head_dim=head_dim,
                 vct_num=vct_num,
                 layer=layer,
+                linear_aggregation=(attention_mode == "contrast_sdt"),
             )
             self.contrast_lif = lif(v_threshold=0.5)
+            if attention_mode == "contrast_sdt":
+                # LIF séparé pour Σ(K⊙V) — forme (…, 1, d) vs v_hat (…, n, d)
+                self.contrast_kv_lif = lif(v_threshold=0.5)
 
         self.proj_conv = nn.Conv2d(dim, dim, kernel_size=1)
         self.proj_bn = nn.BatchNorm2d(dim)
+
+        head_dim = dim // num_heads
+        if mix_rank > 0:
+            self.mix_proj_k = nn.Parameter(torch.empty(num_heads, head_dim, mix_rank))
+            self.mix_proj_v = nn.Parameter(torch.empty(num_heads, head_dim, mix_rank))
+            nn.init.trunc_normal_(self.mix_proj_k, std=0.02)
+            nn.init.trunc_normal_(self.mix_proj_v, std=0.02)
+        if num_landmarks > 0:
+            self.landmark_proj = nn.Parameter(torch.empty(num_heads, head_dim, num_landmarks))
+            nn.init.trunc_normal_(self.landmark_proj, std=0.02)
+
+    def _mix_kwargs(self):
+        use_hgr = self.attention_mode == "factorized_hgr"
+        return dict(
+            mix_rank=self.mix_rank,
+            proj_k=getattr(self, "mix_proj_k", None),
+            proj_v=getattr(self, "mix_proj_v", None),
+            num_landmarks=self.num_landmarks,
+            landmark_proj=getattr(self, "landmark_proj", None),
+            use_hgr=use_hgr,
+            hgr_lambda=self.hgr_lambda,
+            hgr_diag_gate=self.hgr_diag_gate,
+            hgr_trace_gate=self.hgr_trace_gate,
+        )
 
     def _encode_qkv(self, x, T, B, C, H, W):
         """Q/K/V avec encodage hybride (A²OS²A) ou binaire (ablation)."""
@@ -159,11 +213,30 @@ class HPSTAtten(nn.Module):
         return q, k, v, N, head_dim
 
     def _factorized_attention(self, q, k, v, T, B, C, H, W, N, head_dim):
-        """STAtten : Q @ (K^T V) par chunk temporel."""
+        """STAtten : Q @ (K^T V) par chunk temporel (+ ablations complexité)."""
         if self.dvs:
             scaling_factor = 1.0 / (H * H * self.chunk_size)
         else:
             scaling_factor = 1.0 / H
+
+        mix_kw = self._mix_kwargs()
+
+        if self.window_size > 0:
+            # Fenêtre locale spatiale (par pas de temps) — sans chunk temporel STAtten.
+            output = window_factorized_mix(
+                q,
+                k,
+                v,
+                H,
+                W,
+                self.window_size,
+                scaling_factor,
+                shift=self.window_shift,
+                **mix_kw,
+            )
+            x = output.transpose(3, 4).reshape(T, B, C, N).contiguous()
+            x = self.out_lif(x).reshape(T, B, C, H, W).contiguous()
+            return x
 
         num_chunks = T // self.chunk_size
         # Group time into chunks:
@@ -178,11 +251,10 @@ class HPSTAtten(nn.Module):
         k_chunks = k_chunks.reshape(num_chunks, B, self.num_heads, self.chunk_size * N, head_dim)
         v_chunks = v_chunks.reshape(num_chunks, B, self.num_heads, self.chunk_size * N, head_dim)
 
-        # Factorized attention (STAtten):
-        # A = K^T V -> (chunks, B, heads, head_dim, head_dim)
-        # out = Q A -> (chunks, B, heads, cs*N, head_dim)
-        attn = torch.matmul(k_chunks.transpose(-2, -1), v_chunks) * scaling_factor
-        out = torch.matmul(q_chunks, attn)
+        # Factorized attention (STAtten), avec low-rank / Nyström optionnels sur le mixage.
+        out = chunked_factorized_mix(
+            q_chunks, k_chunks, v_chunks, scaling_factor, **mix_kw
+        )
 
         # Restore original layout:
         # (chunks, B, heads, cs*N, head_dim) -> (T, B, heads, N, head_dim)
@@ -212,6 +284,16 @@ class HPSTAtten(nn.Module):
         x = self.out_lif(x).reshape(T, B, C, H, W).contiguous()
         return x
 
+    def _contrast_scaling(self, H: int) -> float:
+        """Normalisation KᵀV (mode contrast uniquement — pas contrast_sdt).
+
+        CIFAR : 1/H (= 1/√N). DVS : 1/N (= 1/H²) par pas de temps ; le factorized
+        DVS utilise 1/(N·chunk) car il fusionne chunk_size pas dans le mixage.
+        """
+        if self.dvs:
+            return 1.0 / (H * H)
+        return 1.0 / H
+
     def _contrast_attention(self, q, k, v, T, B, C, H, W, N, head_dim):
         """Visual-Contrast Attention linéaire (VCA sans Softmax).
 
@@ -219,16 +301,25 @@ class HPSTAtten(nn.Module):
         Complexité O(N·Dh² + n·Dh²) avec n = vct_num ≪ N.
         q, k, v : (T, B, heads, N, head_dim)
         """
-        if self.dvs:
-            scaling_factor = 1.0 / (H * H)
-        else:
-            scaling_factor = 1.0 / H
+        scaling_factor = self._contrast_scaling(H)
 
-        out = self.contrast_mixer(
-            q, k, v, H=H, W=W,
-            scaling_factor=scaling_factor,
-            stage_lif=self.contrast_lif,
+        if self.dvs and self.hybrid_qkv and self.attention_mode in ("contrast", "contrast_sdt"):
+            # K hybride = ReLU (non borné) ; Σ(K⊙V) ou KᵀV diverge sur DVS après ~20–30 ep.
+            k = k.clamp(min=0.0, max=8.0)
+
+        mixer_kwargs = dict(
+            q=q, k=k, v=v, H=H, W=W, scaling_factor=scaling_factor,
         )
+        if self.attention_mode == "contrast_sdt":
+            if self.dvs:
+                mixer_kwargs["kv_token_norm"] = 1.0 / N
+            out = self.contrast_mixer(
+                **mixer_kwargs,
+                stage_lif=self.contrast_kv_lif,
+                stage2_lif=self.contrast_lif,
+            )
+        else:
+            out = self.contrast_mixer(**mixer_kwargs, stage_lif=self.contrast_lif)
         x = out.transpose(3, 4).reshape(T, B, C, N).contiguous()
         x = self.out_lif(x).reshape(T, B, C, H, W).contiguous()
         return x
@@ -244,7 +335,7 @@ class HPSTAtten(nn.Module):
         q, k, v, N, head_dim = self._encode_qkv(x, T, B, C, H, W)
         if self.attention_mode == "sdt":
             x = self._sdt_attention(q, k, v, T, B, C, H, W, N, head_dim)
-        elif self.attention_mode == "contrast":
+        elif self.attention_mode in ("contrast", "contrast_sdt"):
             x = self._contrast_attention(q, k, v, T, B, C, H, W, N, head_dim)
         else:
             x = self._factorized_attention(q, k, v, T, B, C, H, W, N, head_dim)

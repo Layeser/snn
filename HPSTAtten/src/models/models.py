@@ -3,11 +3,69 @@ import torch.nn as nn
 
 from modules.sps import SPS
 from modules.hp_stattn import HPSTAtten
+from modules.mk_hp_stattn import MKHPSTAtten
 from modules.mlp import MLP
 from modules.head import ClassificationHead
 from modules.spike import make_lif
 
-__all__ = ["MS_Block_Conv", "MS_Block_Membrane", "HPSTAttenTransformer"]
+__all__ = ["MS_Block_Conv", "MS_Block_Membrane", "HPSTAttenTransformer", "build_attention"]
+
+
+def build_attention(
+    *,
+    dim,
+    num_heads,
+    spike_mode,
+    lif_backend,
+    chunk_size,
+    hybrid_qkv,
+    dvs,
+    layer,
+    attention_mode,
+    vct_num=16,
+    window_size=0,
+    window_shift=False,
+    mix_rank=0,
+    num_landmarks=0,
+    hgr_lambda=0.1,
+    hgr_diag_gate=True,
+    hgr_trace_gate=True,
+    mk_dual_scale=True,
+):
+    if attention_mode == "mk_hgr":
+        return MKHPSTAtten(
+            dim,
+            num_heads=num_heads,
+            spike_mode=spike_mode,
+            lif_backend=lif_backend,
+            chunk_size=chunk_size,
+            hybrid_qkv=hybrid_qkv,
+            dvs=dvs,
+            layer=layer,
+            hgr_lambda=hgr_lambda,
+            hgr_diag_gate=hgr_diag_gate,
+            hgr_trace_gate=hgr_trace_gate,
+            mk_dual_scale=mk_dual_scale,
+        )
+    return HPSTAtten(
+        dim,
+        num_heads=num_heads,
+        spike_mode=spike_mode,
+        lif_backend=lif_backend,
+        chunk_size=chunk_size,
+        hybrid_qkv=hybrid_qkv,
+        dvs=dvs,
+        layer=layer,
+        attention_mode=attention_mode,
+        vct_num=vct_num,
+        window_size=window_size,
+        window_shift=window_shift,
+        mix_rank=mix_rank,
+        num_landmarks=num_landmarks,
+        hgr_lambda=hgr_lambda,
+        hgr_diag_gate=hgr_diag_gate,
+        hgr_trace_gate=hgr_trace_gate,
+    )
 
 
 class MS_Block_Conv(nn.Module):
@@ -26,10 +84,18 @@ class MS_Block_Conv(nn.Module):
         layer=0,
         attention_mode="factorized",
         vct_num=16,
+        window_size=0,
+        window_shift=False,
+        mix_rank=0,
+        num_landmarks=0,
+        hgr_lambda=0.1,
+        hgr_diag_gate=True,
+        hgr_trace_gate=True,
+        mk_dual_scale=True,
     ):
         super().__init__()
-        self.attn = HPSTAtten(
-            dim,
+        self.attn = build_attention(
+            dim=dim,
             num_heads=num_heads,
             spike_mode=spike_mode,
             lif_backend=lif_backend,
@@ -39,6 +105,14 @@ class MS_Block_Conv(nn.Module):
             layer=layer,
             attention_mode=attention_mode,
             vct_num=vct_num,
+            window_size=window_size,
+            window_shift=window_shift,
+            mix_rank=mix_rank,
+            num_landmarks=num_landmarks,
+            hgr_lambda=hgr_lambda,
+            hgr_diag_gate=hgr_diag_gate,
+            hgr_trace_gate=hgr_trace_gate,
+            mk_dual_scale=mk_dual_scale,
         )
         self.mlp = MLP(
             in_features=dim,
@@ -71,11 +145,19 @@ class MS_Block_Membrane(nn.Module):
         layer=0,
         attention_mode="factorized",
         vct_num=16,
+        window_size=0,
+        window_shift=False,
+        mix_rank=0,
+        num_landmarks=0,
+        hgr_lambda=0.1,
+        hgr_diag_gate=True,
+        hgr_trace_gate=True,
+        mk_dual_scale=True,
     ):
         super().__init__()
         self.sn = make_lif(spike_mode, lif_backend=lif_backend)
-        self.attn = HPSTAtten(
-            dim,
+        self.attn = build_attention(
+            dim=dim,
             num_heads=num_heads,
             spike_mode=spike_mode,
             lif_backend=lif_backend,
@@ -85,6 +167,14 @@ class MS_Block_Membrane(nn.Module):
             layer=layer,
             attention_mode=attention_mode,
             vct_num=vct_num,
+            window_size=window_size,
+            window_shift=window_shift,
+            mix_rank=mix_rank,
+            num_landmarks=num_landmarks,
+            hgr_lambda=hgr_lambda,
+            hgr_diag_gate=hgr_diag_gate,
+            hgr_trace_gate=hgr_trace_gate,
+            mk_dual_scale=mk_dual_scale,
         )
         self.mlp = MLP(
             in_features=dim,
@@ -140,6 +230,14 @@ class HPSTAttenTransformer(nn.Module):
         attention_mode="factorized",
         membrane_block=False,
         vct_num=16,
+        window_size=0,
+        window_shift=False,
+        mix_rank=0,
+        num_landmarks=0,
+        hgr_lambda=0.1,
+        hgr_diag_gate=True,
+        hgr_trace_gate=True,
+        mk_dual_scale=True,
     ):
         super().__init__()
         self.T = T
@@ -175,6 +273,14 @@ class HPSTAttenTransformer(nn.Module):
                     layer=i,
                     attention_mode=attention_mode,
                     vct_num=vct_num,
+                    window_size=window_size,
+                    window_shift=window_shift,
+                    mix_rank=mix_rank,
+                    num_landmarks=num_landmarks,
+                    hgr_lambda=hgr_lambda,
+                    hgr_diag_gate=hgr_diag_gate,
+                    hgr_trace_gate=hgr_trace_gate,
+                    mk_dual_scale=mk_dual_scale,
                 )
                 for i in range(depth)
             ]

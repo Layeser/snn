@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phase 1 Option A : 6 études Optuna (50% train, 20×30 ep) séquentiellement.
+# Phase 1 Option A : 8 études Optuna (grille 4×2, 50% train, 20×30 ep) séquentiellement.
 #
 # Usage :
 #   bash grid5k/run_option_a_optuna.sh

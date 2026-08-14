@@ -63,6 +63,7 @@ def train_one_epoch(
     use_tet: bool = False,
     tet_means: float = 1.0,
     tet_lamb: float = 0.0,
+    grad_clip_max_norm: float | None = None,
 ):
     model.train()
     total_loss = 0.0
@@ -109,6 +110,9 @@ def train_one_epoch(
                 batch_acc = _batch_accuracy(logits, labels, use_tet=use_tet)
 
         scaler.scale(loss).backward()
+        if grad_clip_max_norm is not None and grad_clip_max_norm > 0:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_max_norm)
         scaler.step(optimizer)
         scaler.update()
 

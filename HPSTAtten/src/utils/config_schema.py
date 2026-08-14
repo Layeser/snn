@@ -25,6 +25,10 @@ HPSTATTEN_CONFIG_SCHEMA: Schema = {
     "lif_backend": (str, None),
     "hybrid_qkv": (str, None),
     "attention_mode": (str, None),
+    "window_size": (int, "non_negative"),
+    "window_shift": (str, None),
+    "mix_rank": (int, "non_negative"),
+    "num_landmarks": (int, "non_negative"),
     "membrane_block": (str, None),
     "tet_loss": (str, None),
     "tet_lamb": (float, "non_negative"),
@@ -44,7 +48,19 @@ HPSTATTEN_CONFIG_SCHEMA: Schema = {
 }
 
 
+HGR_CONFIG_DEFAULTS: dict[str, Any] = {
+    "hgr_lambda": 0.1,
+    "hgr_diag_gate": "true",
+    "hgr_trace_gate": "true",
+    "mk_dual_scale": "true",
+}
+
+
 def validate_hpstattn_config(config: dict[str, Any]) -> None:
+    for key, default in HGR_CONFIG_DEFAULTS.items():
+        config.setdefault(key, default)
+    if float(config["hgr_lambda"]) < 0:
+        raise ValueError(f"hgr_lambda doit être >= 0 (reçu: {config['hgr_lambda']})")
     validate_dataset_config(config)
     if config["emb_dim"] % config["num_heads"] != 0:
         raise ValueError(
@@ -69,11 +85,38 @@ def validate_hpstattn_config(config: dict[str, Any]) -> None:
         raise ValueError(
             f"hybrid_qkv doit être 'true' ou 'false' (reçu: {config['hybrid_qkv']!r})"
         )
-    if config["attention_mode"] not in ("factorized", "sdt", "contrast"):
+    if config["attention_mode"] not in (
+        "factorized",
+        "factorized_hgr",
+        "mk_hgr",
+        "sdt",
+        "contrast",
+        "contrast_sdt",
+    ):
         raise ValueError(
-            f"attention_mode doit être 'factorized', 'sdt' ou 'contrast' "
+            "attention_mode doit être 'factorized', 'factorized_hgr', 'mk_hgr', "
+            "'sdt', 'contrast' ou 'contrast_sdt' "
             f"(reçu: {config['attention_mode']!r})"
         )
+    for gate_key in ("hgr_diag_gate", "hgr_trace_gate", "mk_dual_scale"):
+        if gate_key in config and config[gate_key] not in ("true", "false"):
+            raise ValueError(f"{gate_key} doit être 'true' ou 'false' (reçu: {config[gate_key]!r})")
+    if config["window_shift"] not in ("true", "false"):
+        raise ValueError(
+            f"window_shift doit être 'true' ou 'false' (reçu: {config['window_shift']!r})"
+        )
+    complexity_active = (
+        config["window_size"] > 0 or config["mix_rank"] > 0 or config["num_landmarks"] > 0
+    )
+    if complexity_active and config["attention_mode"] not in ("factorized", "factorized_hgr"):
+        raise ValueError(
+            "window_size / mix_rank / num_landmarks ne s'appliquent qu'à "
+            "attention_mode='factorized' ou 'factorized_hgr'"
+        )
+    if config["attention_mode"] == "mk_hgr" and complexity_active:
+        raise ValueError("mk_hgr ne supporte pas window_size / mix_rank / num_landmarks")
+    if config["mix_rank"] > 0 and config["num_landmarks"] > 0:
+        raise ValueError("mix_rank et num_landmarks sont mutuellement exclusifs")
     if config["membrane_block"] not in ("true", "false"):
         raise ValueError(
             f"membrane_block doit être 'true' ou 'false' (reçu: {config['membrane_block']!r})"

@@ -79,13 +79,58 @@ def build_parser(config: dict[str, Any]) -> argparse.ArgumentParser:
         "--attention-mode",
         type=str,
         default=config["attention_mode"],
-        choices=["factorized", "sdt", "contrast"],
+        choices=["factorized", "factorized_hgr", "mk_hgr", "sdt", "contrast", "contrast_sdt"],
+    )
+    p.add_argument("--hgr-lambda", type=float, default=config.get("hgr_lambda", 0.1))
+    p.add_argument(
+        "--hgr-diag-gate",
+        type=str,
+        default=config.get("hgr_diag_gate", "true"),
+        choices=["true", "false"],
+    )
+    p.add_argument(
+        "--hgr-trace-gate",
+        type=str,
+        default=config.get("hgr_trace_gate", "true"),
+        choices=["true", "false"],
+    )
+    p.add_argument(
+        "--mk-dual-scale",
+        type=str,
+        default=config.get("mk_dual_scale", "true"),
+        choices=["true", "false"],
+        help="mk_hgr : 2 échelles (3+7) si true, 3 échelles (3+7+15) si false",
     )
     p.add_argument(
         "--vct-num",
         type=int,
         default=16,
         help="Nombre de tokens contraste (carré parfait, mode contrast uniquement)",
+    )
+    p.add_argument(
+        "--window-size",
+        type=int,
+        default=config["window_size"],
+        help="Fenêtre locale w×w sur factorized (0 = désactivé, ex. 4 pour 4×4)",
+    )
+    p.add_argument(
+        "--window-shift",
+        type=str,
+        default=config["window_shift"],
+        choices=["true", "false"],
+        help="Shifted window (Swin) entre blocs si true",
+    )
+    p.add_argument(
+        "--mix-rank",
+        type=int,
+        default=config["mix_rank"],
+        help="Rang r du mixage low-rank (0 = baseline Dh×Dh)",
+    )
+    p.add_argument(
+        "--num-landmarks",
+        type=int,
+        default=config["num_landmarks"],
+        help="Landmarks Nyström pour le mixage (0 = désactivé)",
     )
     p.add_argument(
         "--membrane-block",
@@ -140,12 +185,32 @@ def main():
     learning_rate = resolve_learning_rate(args.lr, batch_size, config, profile)
     hybrid_qkv = args.hybrid_qkv == "true"
     membrane_block = args.membrane_block == "true"
+    window_shift = args.window_shift == "true"
     lif_backend = resolve_lif_backend(args.lif_backend)
+    complexity_active = (
+        args.window_size > 0 or args.mix_rank > 0 or args.num_landmarks > 0
+    )
+
+    if args.mix_rank > 0 and args.num_landmarks > 0:
+        raise ValueError("mix_rank et num_landmarks sont mutuellement exclusifs")
+    if complexity_active and args.attention_mode not in ("factorized", "factorized_hgr"):
+        raise ValueError(
+            "window_size / mix_rank / num_landmarks ne s'appliquent qu'à "
+            "attention_mode='factorized' ou 'factorized_hgr'"
+        )
+    if args.attention_mode == "mk_hgr" and complexity_active:
+        raise ValueError("mk_hgr ne supporte pas window_size / mix_rank / num_landmarks")
+    hgr_diag_gate = args.hgr_diag_gate == "true"
+    hgr_trace_gate = args.hgr_trace_gate == "true"
+    mk_dual_scale = args.mk_dual_scale == "true"
 
     print(f"Config validée: {args.config}")
     print(f"Dataset: {profile.display_name} ({profile.name})")
     device = resolve_device(args.device)
     config["use_amp"] = configure_cuda_runtime(device)
+    if profile.dvs and args.attention_mode in ("contrast", "contrast_sdt"):
+        config["use_amp"] = False
+        config.setdefault("grad_clip_max_norm", 0.5)
     set_seed(args.seed)
     num_workers = resolve_num_workers(args.num_workers, profile)
     save_dir = Path(args.save_dir)
@@ -153,6 +218,8 @@ def main():
     print(f"Device: {device}")
     print(f"Data dir: {args.data_dir}")
     print(f"AMP: {config['use_amp']}")
+    if config.get("grad_clip_max_norm") is not None:
+        print(f"Grad clip: {config['grad_clip_max_norm']}")
     print(f"DataLoader workers: {num_workers}")
     print(f"Seed: {args.seed} | train_fraction: {args.train_fraction}")
     print(f"LIF backend: {lif_backend} (config lif_backend={args.lif_backend})")
@@ -166,11 +233,18 @@ def main():
         f"lr={learning_rate}, embed_dim={args.embed_dim}, depth={args.depth}, "
         f"T={args.T}, chunk_size={args.chunk_size}, hybrid_qkv={hybrid_qkv}, "
         f"attention_mode={args.attention_mode}, membrane_block={membrane_block}, "
+        f"window_size={args.window_size}, window_shift={window_shift}, "
+        f"mix_rank={args.mix_rank}, num_landmarks={args.num_landmarks}, "
+        f"hgr_lambda={args.hgr_lambda}, hgr_diag_gate={hgr_diag_gate}, "
+        f"hgr_trace_gate={hgr_trace_gate}, mk_dual_scale={mk_dual_scale}, "
         f"tet_loss={config['tet_loss']}"
     )
 
     if args.mlflow_experiment:
         experiment_name = args.mlflow_experiment
+    elif complexity_active:
+        profile_label = get_dataset_profile(args.dataset).mlflow_label
+        experiment_name = f"{MLFLOW_PROJECT_PREFIX}-ComplexityAblation-{profile_label}"
     else:
         experiment_name = mlflow_experiment_name_from_option_a_config(
             MLFLOW_PROJECT_PREFIX, args.dataset, args.config
@@ -210,6 +284,14 @@ def main():
         attention_mode=args.attention_mode,
         membrane_block=membrane_block,
         vct_num=args.vct_num,
+        window_size=args.window_size,
+        window_shift=window_shift,
+        mix_rank=args.mix_rank,
+        num_landmarks=args.num_landmarks,
+        hgr_lambda=args.hgr_lambda,
+        hgr_diag_gate=hgr_diag_gate,
+        hgr_trace_gate=hgr_trace_gate,
+        mk_dual_scale=mk_dual_scale,
     ).to(device)
 
     criterion = build_criterion(config)
@@ -248,6 +330,14 @@ def main():
             "hybrid_qkv": hybrid_qkv,
             "attention_mode": args.attention_mode,
             "vct_num": args.vct_num,
+            "window_size": args.window_size,
+            "window_shift": window_shift,
+            "mix_rank": args.mix_rank,
+            "num_landmarks": args.num_landmarks,
+            "hgr_lambda": args.hgr_lambda,
+            "hgr_diag_gate": hgr_diag_gate,
+            "hgr_trace_gate": hgr_trace_gate,
+            "mk_dual_scale": mk_dual_scale,
             "membrane_block": membrane_block,
             "tet_loss": config["tet_loss"],
             "tet_lamb": config["tet_lamb"],
@@ -263,7 +353,11 @@ def main():
         },
         train_one_epoch=train_one_epoch,
         validate=validate,
-        mismatch_keys=("dataset", "embed_dim", "depth", "num_heads", "T", "batch_size", "chunk_size", "attention_mode", "membrane_block"),
+        mismatch_keys=(
+            "dataset", "embed_dim", "depth", "num_heads", "T", "batch_size", "chunk_size",
+            "attention_mode", "membrane_block", "window_size", "window_shift",
+            "mix_rank", "num_landmarks", "hgr_lambda", "hgr_diag_gate", "hgr_trace_gate", "mk_dual_scale",
+        ),
         run_name_prefix="hpstattn",
         project_root=ROOT,
     )

@@ -190,9 +190,10 @@ def default_run_name(prefix: str) -> str:
 
 def optuna_study_slug(study_name: str) -> str:
     """Raccourci lisible pour MLflow (ex. hpstattn-cifar10-oa-hp → oa-hp)."""
-    marker = "-oa-"
-    if marker in study_name:
-        return "oa-" + study_name.split(marker, 1)[1]
+    for marker in ("-oa-", "-sota-"):
+        if marker in study_name:
+            tag = "oa-" if marker == "-oa-" else "sota-"
+            return tag + study_name.split(marker, 1)[1]
     parts = study_name.split("-")
     if len(parts) >= 2 and parts[0] == "hpstattn":
         return "-".join(parts[1:])
@@ -212,6 +213,7 @@ def optuna_run_name_prefix(
         "factorized": "fac",
         "sdt": "sdt",
         "contrast": "con",
+        "contrast_sdt": "csdt",
     }.get(attention_mode or "", "att")
     if hybrid_qkv is True:
         qkv_short = "hyb"
