@@ -136,6 +136,13 @@ def build_tune_parser() -> argparse.ArgumentParser:
         default=16,
         help="Tokens contraste (mode contrast uniquement)",
     )
+    p.add_argument(
+        "--mk-dual-scale",
+        type=str,
+        default=None,
+        choices=["true", "false"],
+        help="mk_hgr : 2 échelles (3+7) si true, 3 échelles (3+7+15) si false",
+    )
     return p
 
 
@@ -221,6 +228,8 @@ def main() -> None:
         base_config["attention_mode"] = tune_args.attention_mode
     if tune_args.hybrid_qkv is not None:
         base_config["hybrid_qkv"] = tune_args.hybrid_qkv
+    if tune_args.mk_dual_scale is not None:
+        base_config["mk_dual_scale"] = tune_args.mk_dual_scale
 
     dataset = tune_args.dataset or base_config["dataset"]
     data_dir = resolve_project_path(tune_args.data_dir or base_config["data_dir"], ROOT)
