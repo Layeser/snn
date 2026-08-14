@@ -1,0 +1,23 @@
+#!/bin/bash
+# Optuna lite DVS — famille factorized (HP-STAtten hybrid)
+# Proxy → transfert HP vers statten (binary)
+# 1/3 train, 20 essais × 30 ep, batch 8
+
+STUDY="hpstattn-cifar10-dvs-oa-factorized"
+SAVE_ROOT="$HOME/internship/snn/HPSTAtten/save/optuna_dvs/factorized"
+mkdir -p "$SAVE_ROOT"
+
+cd HPSTAtten
+python -m scripts.tune \
+    --config config/campaigns/cifar10_dvs_subset_optuna.yml \
+    --dataset cifar10-dvs \
+    --attention-mode factorized \
+    --hybrid-qkv true \
+    --batch-size 8 \
+    --train-fraction 0.333333 \
+    --seed 42 \
+    --n-trials 20 \
+    --tune-epochs 30 \
+    --study-name "$STUDY" \
+    --save-dir "$SAVE_ROOT" \
+    --tune-aug

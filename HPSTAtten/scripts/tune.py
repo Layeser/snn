@@ -97,6 +97,16 @@ def build_tune_parser() -> argparse.ArgumentParser:
         help="Fraction stratifiée du train à utiliser (ex: 0.333 pour 1/3)",
     )
     p.add_argument("--tune-arch", action="store_true", help="Inclure embed_dim/depth/num_heads dans la recherche")
+    p.add_argument(
+        "--tune-aug",
+        action="store_true",
+        help="Rechercher rand_augment et random_erasing (rebuild loaders par essai)",
+    )
+    p.add_argument(
+        "--tune-batch",
+        action="store_true",
+        help="Rechercher batch_size ∈ {32, 64} (rebuild loaders par essai)",
+    )
     p.add_argument("--no-pruning", action="store_true", help="Désactiver le MedianPruner")
     p.add_argument("--no-resume-interrupted", action="store_true",
                    help="Ne pas reprendre les essais Optuna laissés en RUNNING")
@@ -104,7 +114,7 @@ def build_tune_parser() -> argparse.ArgumentParser:
         "--attention-mode",
         type=str,
         default=None,
-        choices=["factorized", "sdt", "contrast"],
+        choices=["factorized", "factorized_hgr", "mk_hgr", "sdt", "contrast", "contrast_sdt"],
         help="Override attention_mode du config (ablation Option A)",
     )
     p.add_argument(
@@ -118,7 +128,7 @@ def build_tune_parser() -> argparse.ArgumentParser:
         "--mlflow-experiment",
         type=str,
         default=None,
-        help="Nom d'expérience MLflow (défaut : HP-STAtten-CIFAR10 ou HP-STAtten-CIFAR10-OptionA-<variante>)",
+        help="Nom d'expérience MLflow (défaut : HP-STAtten-OptionA-<dataset> si étude -oa-/-sota-, sinon HP-STAtten-CIFAR10…)",
     )
     p.add_argument(
         "--vct-num",
@@ -133,6 +143,9 @@ def params_from_trial(
     trial_params: dict[str, Any],
     base_config: dict[str, Any],
     tune_arch: bool,
+    tune_aug: bool,
+    tune_batch: bool,
+    fixed_batch_size: int,
 ) -> dict[str, Any]:
     """Reconstruit le dict d'hyperparamètres à partir d'un essai Optuna stocké."""
     params = dict(trial_params)
@@ -140,13 +153,26 @@ def params_from_trial(
         params.setdefault("embed_dim", int(base_config["emb_dim"]))
         params.setdefault("depth", int(base_config["depth"]))
         params.setdefault("num_heads", int(base_config["num_heads"]))
+    if not tune_aug:
+        params.setdefault("rand_augment", base_config["rand_augment"] == "true")
+        params.setdefault("random_erasing", float(base_config["random_erasing"]))
+    if not tune_batch:
+        params.setdefault("batch_size", fixed_batch_size)
     if params.get("scheduler") != "cosine":
         params.setdefault("warmup_epochs", int(base_config["warmup_epochs"]))
     return params
 
 
-def suggest_hyperparams(trial, base_config: dict[str, Any], tune_epochs: int, tune_arch: bool) -> dict[str, Any]:
-    """Espace de recherche : optimisation + régularisation (+ archi si demandé)."""
+def suggest_hyperparams(
+    trial,
+    base_config: dict[str, Any],
+    tune_epochs: int,
+    tune_arch: bool,
+    tune_aug: bool,
+    tune_batch: bool,
+    fixed_batch_size: int,
+) -> dict[str, Any]:
+    """Espace de recherche : optimisation + régularisation (+ archi / aug / batch si demandé)."""
     params: dict[str, Any] = {
         "learning_rate": trial.suggest_float("learning_rate", 1e-6, 5e-3, log=True),
         "weight_decay": trial.suggest_float("weight_decay", 0.0, 0.1),
@@ -159,8 +185,20 @@ def suggest_hyperparams(trial, base_config: dict[str, Any], tune_epochs: int, tu
     else:
         params["warmup_epochs"] = int(base_config["warmup_epochs"])
 
+    if tune_aug:
+        params["rand_augment"] = trial.suggest_categorical("rand_augment", [True, False])
+        params["random_erasing"] = trial.suggest_categorical("random_erasing", [0.0, 0.25])
+    else:
+        params["rand_augment"] = base_config["rand_augment"] == "true"
+        params["random_erasing"] = float(base_config["random_erasing"])
+
+    if tune_batch:
+        params["batch_size"] = trial.suggest_categorical("batch_size", [32, 64])
+    else:
+        params["batch_size"] = fixed_batch_size
+
     if tune_arch:
-        params["embed_dim"] = trial.suggest_categorical("embed_dim", [128, 256])
+        params["embed_dim"] = trial.suggest_categorical("embed_dim", [256, 384, 512])
         params["depth"] = trial.suggest_categorical("depth", [2, 4])
         params["num_heads"] = trial.suggest_categorical("num_heads", [4, 8])
     else:
@@ -191,7 +229,7 @@ def main() -> None:
     use_amp = configure_cuda_runtime(device)
     set_seed(tune_args.seed)
 
-    # Batch/T fixes pour toute l'étude → on construit les loaders une seule fois.
+    # Batch/T fixes sauf si --tune-batch (loaders reconstruits par essai).
     batch_size = resolve_training_batch_size(
         tune_args.batch_size or int(base_config["batch_size"]), base_config, profile
     )
@@ -200,20 +238,24 @@ def main() -> None:
         tune_args.num_workers if tune_args.num_workers is not None else int(base_config["num_workers"]),
         profile,
     )
+    rebuild_loaders = tune_args.tune_aug or tune_args.tune_batch
 
     loader_config = apply_dataset_training_overrides(base_config, dataset)
-    train_loader, val_loader = get_dataset_loaders(
-        dataset=dataset,
-        data_dir=data_dir,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        download=True,
-        project_root=ROOT,
-        T=T,
-        train_fraction=tune_args.train_fraction,
-        seed=tune_args.seed,
-        **loader_kwargs_from_config(loader_config, dataset),
-    )
+    if not rebuild_loaders:
+        train_loader, val_loader = get_dataset_loaders(
+            dataset=dataset,
+            data_dir=data_dir,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            download=True,
+            project_root=ROOT,
+            T=T,
+            train_fraction=tune_args.train_fraction,
+            seed=tune_args.seed,
+            **loader_kwargs_from_config(loader_config, dataset),
+        )
+    else:
+        train_loader = val_loader = None  # type: ignore[assignment]
 
     study_name = tune_args.study_name or f"hpstattn-{dataset}"
     storage = optuna_storage_url(ROOT)
@@ -238,14 +280,36 @@ def main() -> None:
     print(f"Dataset: {profile.display_name} | batch={batch_size} T={T} | device={device} AMP={use_amp}")
     print(f"Seed: {tune_args.seed} | train_fraction: {tune_args.train_fraction}")
     print(f"Budget: {tune_args.n_trials} essais × {tune_args.tune_epochs} epochs | pruning={not tune_args.no_pruning}")
-    print(f"Train batches: {len(train_loader)} | Val batches: {len(val_loader)}")
+    if rebuild_loaders:
+        print(f"Loaders: reconstruits par essai (tune_aug={tune_args.tune_aug}, tune_batch={tune_args.tune_batch})")
+    else:
+        print(f"Train batches: {len(train_loader)} | Val batches: {len(val_loader)}")
 
     lif_backend = resolve_lif_backend(base_config["lif_backend"])
     hybrid_qkv = base_config["hybrid_qkv"] == "true"
+    hgr_lambda = float(base_config.get("hgr_lambda", 0.1))
+    hgr_diag_gate = base_config.get("hgr_diag_gate", "true") == "true"
+    hgr_trace_gate = base_config.get("hgr_trace_gate", "true") == "true"
+    mk_dual_scale = base_config.get("mk_dual_scale", "true") == "true"
     attention_mode = base_config["attention_mode"]
     vct_num = tune_args.vct_num
 
     study_dir = base_save_dir / study_name
+
+    def build_loaders_for_trial(trial_config: dict[str, Any], trial_batch: int):
+        cfg = apply_dataset_training_overrides(trial_config, dataset)
+        return get_dataset_loaders(
+            dataset=dataset,
+            data_dir=data_dir,
+            batch_size=trial_batch,
+            num_workers=num_workers,
+            download=True,
+            project_root=ROOT,
+            T=T,
+            train_fraction=tune_args.train_fraction,
+            seed=tune_args.seed,
+            **loader_kwargs_from_config(cfg, dataset),
+        )
 
     def run_optuna_trial(trial, *, params: dict[str, Any], fresh: bool) -> float:
         trial_config = copy.deepcopy(base_config)
@@ -253,8 +317,20 @@ def main() -> None:
         trial_config["label_smoothing"] = params["label_smoothing"]
         trial_config["scheduler"] = params["scheduler"]
         trial_config["warmup_epochs"] = params["warmup_epochs"]
+        if tune_args.tune_aug:
+            trial_config["rand_augment"] = "true" if params["rand_augment"] else "false"
+            trial_config["random_erasing"] = params["random_erasing"]
         trial_config = apply_dataset_training_overrides(trial_config, dataset)
         trial_config["use_amp"] = use_amp
+        if profile.dvs and attention_mode in ("contrast", "contrast_sdt"):
+            trial_config["use_amp"] = False
+            trial_config.setdefault("grad_clip_max_norm", 0.5)
+
+        trial_batch = int(params["batch_size"])
+        if rebuild_loaders:
+            trial_train_loader, trial_val_loader = build_loaders_for_trial(trial_config, trial_batch)
+        else:
+            trial_train_loader, trial_val_loader = train_loader, val_loader
 
         model = HPSTAttenTransformer(
             img_size=resolve_model_img_size(trial_config, profile),
@@ -272,6 +348,10 @@ def main() -> None:
             T=T,
             attention_mode=attention_mode,
             vct_num=vct_num,
+            hgr_lambda=hgr_lambda,
+            hgr_diag_gate=hgr_diag_gate,
+            hgr_trace_gate=hgr_trace_gate,
+            mk_dual_scale=mk_dual_scale,
         ).to(device)
 
         criterion = build_criterion(trial_config)
@@ -302,8 +382,8 @@ def main() -> None:
 
         best_val_acc, _ = run_training(
             model=model,
-            train_loader=train_loader,
-            val_loader=val_loader,
+            train_loader=trial_train_loader,
+            val_loader=trial_val_loader,
             criterion=criterion,
             optimizer=optimizer,
             scheduler=scheduler,
@@ -314,11 +394,11 @@ def main() -> None:
             experiment_name=experiment_name,
             hyperparams={
                 **dataset_hyperparams(dataset, data_dir, trial_config),
-                **dataset_split_params(train_loader, val_loader),
+                **dataset_split_params(trial_train_loader, trial_val_loader),
                 "optuna_trial": trial.number,
                 "optuna_study": study_name,
                 "epochs": tune_args.tune_epochs,
-                "batch_size": batch_size,
+                "batch_size": trial_batch,
                 "T": T,
                 "chunk_size": base_config["chunk_size"],
                 "pooling_stat": base_config["pooling_stat"],
@@ -331,6 +411,8 @@ def main() -> None:
                 "train_fraction": tune_args.train_fraction,
                 "use_amp": use_amp,
                 "device": str(device),
+                "rand_augment": trial_config.get("rand_augment") == "true",
+                "random_erasing": float(trial_config.get("random_erasing", 0.0)),
                 **params,
                 **recipe_hyperparams(trial_config),
             },
@@ -354,7 +436,14 @@ def main() -> None:
             tune_epochs=tune_args.tune_epochs,
             run_trial=lambda trial, fresh: run_optuna_trial(
                 trial,
-                params=params_from_trial(trial.params, base_config, tune_args.tune_arch),
+                params=params_from_trial(
+                    trial.params,
+                    base_config,
+                    tune_args.tune_arch,
+                    tune_args.tune_aug,
+                    tune_args.tune_batch,
+                    batch_size,
+                ),
                 fresh=fresh,
             ),
         )
@@ -362,7 +451,15 @@ def main() -> None:
             print(f"{n_resumed} essai(s) interrompu(s) repris avant les nouveaux essais.")
 
     def objective(trial: optuna.Trial) -> float:
-        params = suggest_hyperparams(trial, base_config, tune_args.tune_epochs, tune_args.tune_arch)
+        params = suggest_hyperparams(
+            trial,
+            base_config,
+            tune_args.tune_epochs,
+            tune_args.tune_arch,
+            tune_args.tune_aug,
+            tune_args.tune_batch,
+            batch_size,
+        )
         return run_optuna_trial(trial, params=params, fresh=True)
 
     study.optimize(

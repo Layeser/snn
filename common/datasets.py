@@ -66,11 +66,22 @@ def mlflow_experiment_name(project_prefix: str, dataset: str) -> str:
     return f"{project_prefix}-{profile.mlflow_label}"
 
 
+def mlflow_experiment_name_option_a(project_prefix: str, dataset: str) -> str:
+    """Expérience MLflow dédiée Option A / Optuna lite (hors CIFAR10 / CIFAR10-DVS grid)."""
+    profile = get_dataset_profile(dataset)
+    return f"{project_prefix}-OptionA-{profile.mlflow_label}"
+
+
+def is_option_a_optuna_study(study_name: str) -> bool:
+    """Détecte les études Optuna Option A (lite ou complète)."""
+    return "-oa-" in study_name or "-sota-" in study_name
+
+
 def option_a_variant_from_study(study_name: str) -> str | None:
     """Extrait la variante Option A depuis un study_name Optuna (ex. hpstattn-cifar10-oa-hp → hp)."""
-    marker = "-oa-"
-    if marker in study_name:
-        return study_name.split(marker, 1)[1]
+    for marker in ("-oa-", "-sota-"):
+        if marker in study_name:
+            return study_name.split(marker, 1)[1]
     return None
 
 
@@ -81,15 +92,12 @@ def mlflow_experiment_name_for_study(
     *,
     mlflow_experiment: str | None = None,
 ) -> str:
-    """Nom d'expérience MLflow ; une sous-expérience par variante Option A (-oa- dans study_name)."""
+    """Nom d'expérience MLflow ; Option A → dossier HP-STAtten-OptionA-<dataset>."""
     if mlflow_experiment:
         return mlflow_experiment
-    base = mlflow_experiment_name(project_prefix, dataset)
-    if study_name:
-        variant = option_a_variant_from_study(study_name)
-        if variant:
-            return f"{base}-OptionA-{variant}"
-    return base
+    if study_name and is_option_a_optuna_study(study_name):
+        return mlflow_experiment_name_option_a(project_prefix, dataset)
+    return mlflow_experiment_name(project_prefix, dataset)
 
 
 def mlflow_experiment_name_from_option_a_config(
@@ -97,14 +105,14 @@ def mlflow_experiment_name_from_option_a_config(
     dataset: str,
     config_path: str | Path,
 ) -> str | None:
-    """Déduit l'expérience Option A depuis config/campaigns/option_a/cifar10_<id>_best.yml."""
+    """Déduit l'expérience Option A depuis campaigns option_a/ ou sota_lite/."""
+    path_str = str(config_path).replace("\\", "/")
+    if "option_a" in path_str or "sota_lite" in path_str:
+        return mlflow_experiment_name_option_a(project_prefix, dataset)
     stem = Path(config_path).stem
     prefix = "cifar10_"
-    suffix = "_best"
-    if stem.startswith(prefix) and stem.endswith(suffix):
-        variant = stem[len(prefix) : -len(suffix)]
-        base = mlflow_experiment_name(project_prefix, dataset)
-        return f"{base}-OptionA-{variant}"
+    if stem.startswith(prefix) and (stem.endswith("_best") or stem.endswith("_transferred")):
+        return mlflow_experiment_name_option_a(project_prefix, dataset)
     return None
 
 

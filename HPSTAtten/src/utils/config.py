@@ -10,7 +10,17 @@ Schema = dict[str, tuple[type, str | None]]
 
 # Clés optionnelles (surtout DVS) autorisées sans être dans le schéma principal.
 OPTIONAL_CONFIG_KEYS = frozenset(
-    {"dvs_resize", "dvs_cutout", "learning_rate_dvs", "batch_size_dvs", "mixup_off_epoch"}
+    {
+        "dvs_resize",
+        "dvs_cutout",
+        "learning_rate_dvs",
+        "batch_size_dvs",
+        "mixup_off_epoch",
+        "hgr_lambda",
+        "hgr_diag_gate",
+        "hgr_trace_gate",
+        "mk_dual_scale",
+    }
 )
 
 

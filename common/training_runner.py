@@ -175,6 +175,10 @@ def run_training(
             print(f"\n--- Epoch {epoch}/{args.epochs} ---")
             logger.info("Epoch %s/%s — début", epoch, args.epochs)
 
+            grad_clip = config.get("grad_clip_max_norm")
+            if grad_clip is not None:
+                grad_clip = float(grad_clip)
+
             train_loss, train_acc = train_one_epoch(
                 model,
                 train_loader,
@@ -186,6 +190,7 @@ def run_training(
                 use_tet=config.get("tet_loss", "false") == "true",
                 tet_means=float(config.get("tet_means", 1.0)),
                 tet_lamb=float(config.get("tet_lamb", 0.0)),
+                grad_clip_max_norm=grad_clip,
             )
             val_loss, val_acc = validate(
                 model,

@@ -32,10 +32,15 @@ def _merge_best_params(base: dict[str, Any], best: dict[str, Any], *, epochs: in
         "embed_dim": "emb_dim",
         "depth": "depth",
         "num_heads": "num_heads",
+        "random_erasing": "random_erasing",
+        "batch_size": "batch_size",
     }
     for src, dst in mapping.items():
         if src in bp:
             out[dst] = bp[src]
+
+    if "rand_augment" in bp:
+        out["rand_augment"] = "true" if bp["rand_augment"] else "false"
 
     if out.get("scheduler") != "cosine":
         out.setdefault("warmup_epochs", int(base.get("warmup_epochs", 0)))
@@ -48,7 +53,7 @@ def main() -> None:
     p.add_argument("--base-config", type=str, default=str(ROOT / "config" / "train_cifar10.yml"))
     p.add_argument("--output", type=str, required=True, help="Fichier YAML de sortie")
     p.add_argument("--epochs", type=int, default=200)
-    p.add_argument("--attention-mode", type=str, default=None, choices=["factorized", "sdt", "contrast"])
+    p.add_argument("--attention-mode", type=str, default=None, choices=["factorized", "factorized_hgr", "mk_hgr", "sdt", "contrast", "contrast_sdt"])
     p.add_argument("--hybrid-qkv", type=str, default=None, choices=["true", "false"])
     args = p.parse_args()
 
