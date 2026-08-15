@@ -47,6 +47,17 @@ TUNE_BASE=(
     --tune-batch
 )
 
+TUNE_BASE_MK=(
+    "$PY" -m scripts.tune
+    --dataset cifar10
+    --data-dir "$DATA"
+    --train-fraction "$TRAIN_FRACTION"
+    --seed 42
+    --n-trials "$N_TRIALS"
+    --tune-epochs "$TUNE_EPOCHS"
+    --tune-aug
+)
+
 launch() {
     local name="$1" gpu="$2"
     shift 2
@@ -54,6 +65,18 @@ launch() {
     (
         export CUDA_VISIBLE_DEVICES="$gpu"
         "${TUNE_BASE[@]}" "$@" >"$LOG/${name}.out" 2>"$LOG/${name}.err"
+    ) &
+    pids+=($!)
+    names+=("$name")
+}
+
+launch_mk() {
+    local name="$1" gpu="$2"
+    shift 2
+    echo "[GPU $gpu] $name (batch fixe ${MK_BATCH:-32}, pas tune-batch)"
+    (
+        export CUDA_VISIBLE_DEVICES="$gpu"
+        "${TUNE_BASE_MK[@]}" "$@" >"$LOG/${name}.out" 2>"$LOG/${name}.err"
     ) &
     pids+=($!)
     names+=("$name")
@@ -80,8 +103,10 @@ launch contrast_sdt_hyb 2 \
     --save-dir save/optuna_opt512/contrast_sdt_hyb \
     --mlflow-experiment HP-STAtten-CIFAR10-Opt512-contrast-sdt-hyb
 
-launch mk_hgr_triple 3 \
-    --attention-mode mk_hgr --hybrid-qkv true --mk-dual-scale false \
+launch_mk mk_hgr_triple 3 \
+    --config "$HPST/config/campaigns/cifar10_opt512_mk_hgr_triple.yml" \
+    --attention-mode mk_hgr --hybrid-qkv true \
+    --batch-size "${MK_BATCH:-32}" \
     --study-name hpstattn-cifar10-opt512-mk-hgr-triple \
     --save-dir save/optuna_opt512/mk_hgr_triple \
     --mlflow-experiment HP-STAtten-CIFAR10-Opt512-mk-hgr-triple

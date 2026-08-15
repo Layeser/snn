@@ -74,7 +74,7 @@ def main() -> None:
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    header_lines = ["# Campagne Option A — HP exportés depuis Optuna"]
+    header_lines = ["# Campagne — HP exportés depuis Optuna"]
     if "study_name" in best_payload:
         header_lines.append(f"# Study: {best_payload['study_name']}")
     if "best_trial" in best_payload:
