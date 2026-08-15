@@ -41,6 +41,20 @@ if [[ ! -f "$CFG" ]]; then
     echo "ERREUR: config introuvable → $CFG" >&2
     exit 1
 fi
+if ! "$PY" -c "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)"; then
+    echo "ERREUR: CUDA indisponible sur $(hostname)." >&2
+    echo "  Lancer ce script sur un nœud GPU (sirius-1), pas sur la frontale (flyon)." >&2
+    exit 1
+fi
+
+cd "$HPST"
+
+echo "Préparation CIFAR-10-DVS T=16 (une fois, avant les 4 GPU)…"
+"$PY" "$SNN_ROOT/scripts/download_data.py" cifar10-dvs \
+    --data-dir "$DATA" --prepare-frames --frames 16 || {
+    echo "ERREUR: préparation CIFAR-10-DVS échouée." >&2
+    exit 1
+}
 
 TUNE_BASE=(
     "$PY" -m scripts.tune

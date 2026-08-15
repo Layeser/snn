@@ -121,6 +121,8 @@ def train_one_epoch(
         n_batches += 1
         pbar.set_postfix(loss=f"{loss.item():.4f}", acc=f"{batch_acc:.2f}%")
 
+    if n_batches == 0:
+        raise RuntimeError("DataLoader vide (0 batch). Cache DVS incomplet ?")
     return total_loss / n_batches, total_acc / n_batches
 
 
@@ -159,4 +161,6 @@ def validate(
         n_batches += 1
         pbar.set_postfix(loss=f"{loss.item():.4f}", acc=f"{batch_acc:.2f}%")
 
+    if n_batches == 0:
+        raise RuntimeError("DataLoader vide (0 batch). Cache DVS incomplet ?")
     return total_loss / n_batches, total_acc / n_batches

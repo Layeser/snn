@@ -8,10 +8,15 @@ threads et laisse des dossiers events_np/frames vides.
 
 from __future__ import annotations
 
+import fcntl
 import shutil
 from pathlib import Path
 
 import numpy as np
+
+# CIFAR-10-DVS : 10 classes × 1000 séquences. Un cache partiel (course parallèle)
+# ne doit jamais être considéré comme prêt.
+CIFAR10_DVS_EXPECTED_SAMPLES = 10_000
 
 _PATCHED = False
 
@@ -74,7 +79,7 @@ def is_cifar10_dvs_frames_ready(
     frames_number: int,
     split_by: str = "number",
 ) -> bool:
-    return count_npz_files(frames_dir(dvs_root, frames_number, split_by)) > 0
+    return count_npz_files(frames_dir(dvs_root, frames_number, split_by)) >= CIFAR10_DVS_EXPECTED_SAMPLES
 
 
 def reset_incomplete_cifar10_dvs_cache(
@@ -83,19 +88,26 @@ def reset_incomplete_cifar10_dvs_cache(
     split_by: str = "number",
     verbose: bool = True,
 ) -> None:
-    """Supprime les caches vides laissés par une conversion échouée."""
+    """Supprime les caches incomplets (course parallèle, conversion interrompue)."""
     events_root = dvs_root / "events_np"
     frames_root = frames_dir(dvs_root, frames_number, split_by)
 
-    if events_root.is_dir() and count_npz_files(events_root) == 0:
+    n_events = count_npz_files(events_root)
+    if events_root.is_dir() and n_events < CIFAR10_DVS_EXPECTED_SAMPLES:
         if verbose:
-            print(f"Cache DVS incomplet supprimé → {events_root}")
+            print(f"Cache events_np incomplet ({n_events}/{CIFAR10_DVS_EXPECTED_SAMPLES}) supprimé → {events_root}")
         shutil.rmtree(events_root)
 
-    if frames_root.is_dir() and count_npz_files(frames_root) == 0:
+    n_frames = count_npz_files(frames_root)
+    if frames_root.is_dir() and n_frames < CIFAR10_DVS_EXPECTED_SAMPLES:
         if verbose:
-            print(f"Cache frames incomplet supprimé → {frames_root}")
+            print(f"Cache frames incomplet ({n_frames}/{CIFAR10_DVS_EXPECTED_SAMPLES}) supprimé → {frames_root}")
         shutil.rmtree(frames_root)
+
+    for split_cache in dvs_root.glob(f"split_*_frames_{frames_number}.pt"):
+        if verbose:
+            print(f"Split cache DVS obsolète supprimé → {split_cache}")
+        split_cache.unlink(missing_ok=True)
 
 
 def prepare_cifar10_dvs_frames(
@@ -108,13 +120,27 @@ def prepare_cifar10_dvs_frames(
     Télécharge (si besoin), convertit events_np et intègre les frames.
     Peut prendre 10–30 min au premier lancement.
     """
-    from spikingjelly.datasets.cifar10_dvs import CIFAR10DVS
-
-    from data_download import download_cifar10_dvs_archives
-
     apply_cifar10_dvs_numpy2_patch()
     dvs_root = Path(dvs_root)
     dvs_root.mkdir(parents=True, exist_ok=True)
+
+    lock_path = dvs_root / ".prepare.lock"
+    with lock_path.open("w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        _prepare_cifar10_dvs_frames_locked(
+            dvs_root, frames_number, split_by, verbose=verbose
+        )
+
+
+def _prepare_cifar10_dvs_frames_locked(
+    dvs_root: Path,
+    frames_number: int,
+    split_by: str,
+    verbose: bool,
+) -> None:
+    from spikingjelly.datasets.cifar10_dvs import CIFAR10DVS
+
+    from data_download import download_cifar10_dvs_archives
 
     if is_cifar10_dvs_frames_ready(dvs_root, frames_number, split_by):
         if verbose:
@@ -140,7 +166,9 @@ def prepare_cifar10_dvs_frames(
 
     if not is_cifar10_dvs_frames_ready(dvs_root, frames_number, split_by):
         raise RuntimeError(
-            "La préparation CIFAR-10-DVS a échoué (aucun fichier frame .npz). "
+            f"La préparation CIFAR-10-DVS a échoué "
+            f"({count_npz_files(frames_dir(dvs_root, frames_number, split_by))}"
+            f"/{CIFAR10_DVS_EXPECTED_SAMPLES} frames). "
             "Vérifiez les archives dans download/ et relancez."
         )
 
