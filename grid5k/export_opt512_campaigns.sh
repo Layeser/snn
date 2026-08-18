@@ -26,9 +26,10 @@ ok=0
 skip=0
 
 for entry in "${OPT512_VARIANTS[@]}"; do
-    IFS='|' read -r id attn hybrid study save_rel _mlflow <<< "$entry"
+    IFS='|' read -r id attn hybrid study save_rel _mlflow base_cfg <<< "$entry"
     best="${HPST}/save/${save_rel}/${study}/best_params.yml"
     out="${CAMPAIGN_DIR}/cifar10_${id}_best.yml"
+    base_config="${HPST}/config/campaigns/${base_cfg:-cifar10_grid_sota_512.yml}"
 
     if [[ ! -f "$best" ]]; then
         echo "SKIP $id — absent: $best"
@@ -38,7 +39,7 @@ for entry in "${OPT512_VARIANTS[@]}"; do
 
     "$PY" -m scripts.export_optuna_campaign \
         --best-params "$best" \
-        --base-config "$BASE_CONFIG" \
+        --base-config "$base_config" \
         --attention-mode "$attn" \
         --hybrid-qkv "$hybrid" \
         --epochs "$EPOCHS" \

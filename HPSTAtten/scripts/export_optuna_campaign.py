@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT.parent / "common"))
 sys.path.insert(0, str(ROOT / "src"))
 
 from utils.config import load_and_validate_config
-from utils.config_schema import HPSTATTEN_CONFIG_SCHEMA, validate_hpstatten_config
+from utils.config_schema import HPSTATTEN_CONFIG_SCHEMA, validate_hpstattn_config
 
 
 def _merge_best_params(base: dict[str, Any], best: dict[str, Any], *, epochs: int) -> dict[str, Any]:
@@ -63,7 +63,7 @@ def main() -> None:
     base = load_and_validate_config(
         Path(args.base_config),
         HPSTATTEN_CONFIG_SCHEMA,
-        extra_validators=[validate_hpstatten_config],
+        extra_validators=[validate_hpstattn_config],
     )
     if args.attention_mode is not None:
         base["attention_mode"] = args.attention_mode

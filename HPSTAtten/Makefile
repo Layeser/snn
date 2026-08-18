@@ -74,8 +74,12 @@ grid-factorized-hgr:  SAVE_DIR := $(GRID_DIR)/factorized_hgr_hybrid
 grid-factorized-hgr:  GRID_ARGS := --attention-mode factorized_hgr --hybrid-qkv true
 grid-mk-hgr:          SAVE_DIR := $(GRID_DIR)/mk_hgr_hybrid
 grid-mk-hgr:          GRID_ARGS := --attention-mode mk_hgr --hybrid-qkv true --mk-dual-scale true
+grid-mk-hgr-binary:   SAVE_DIR := $(GRID_DIR)/mk_hgr_binary
+grid-mk-hgr-binary:   GRID_ARGS := --attention-mode mk_hgr --hybrid-qkv false --mk-dual-scale true
 grid-mk-hgr-triple:   SAVE_DIR := $(GRID_DIR)/mk_hgr_triple_hybrid
 grid-mk-hgr-triple:   GRID_ARGS := --attention-mode mk_hgr --hybrid-qkv true --mk-dual-scale false
+grid-mk-hgr-triple-binary: SAVE_DIR := $(GRID_DIR)/mk_hgr_triple_binary
+grid-mk-hgr-triple-binary: GRID_ARGS := --attention-mode mk_hgr --hybrid-qkv false --mk-dual-scale false
 
 define run_grid_train
 	@mkdir -p $(SAVE_DIR)
@@ -84,7 +88,8 @@ define run_grid_train
 endef
 
 grid-hp grid-hp-linear grid-contrast grid-contrast-sdt grid-statten grid-sdt \
-grid-contrast-binary grid-contrast-sdt-binary grid-factorized-hgr grid-mk-hgr grid-mk-hgr-triple: check-deps
+grid-contrast-binary grid-contrast-sdt-binary grid-factorized-hgr grid-mk-hgr grid-mk-hgr-binary \
+grid-mk-hgr-triple grid-mk-hgr-triple-binary: check-deps
 	$(call run_grid_train,)
 
 grid-fresh-hp:              SAVE_DIR := $(GRID_DIR)/hp_factorized_hybrid
@@ -107,10 +112,12 @@ grid-fresh-factorized-hgr:  SAVE_DIR := $(GRID_DIR)/factorized_hgr_hybrid
 grid-fresh-factorized-hgr:  GRID_ARGS := --attention-mode factorized_hgr --hybrid-qkv true
 grid-fresh-mk-hgr:          SAVE_DIR := $(GRID_DIR)/mk_hgr_hybrid
 grid-fresh-mk-hgr:          GRID_ARGS := --attention-mode mk_hgr --hybrid-qkv true --mk-dual-scale true
+grid-fresh-mk-hgr-binary:   SAVE_DIR := $(GRID_DIR)/mk_hgr_binary
+grid-fresh-mk-hgr-binary:   GRID_ARGS := --attention-mode mk_hgr --hybrid-qkv false --mk-dual-scale true
 
 grid-fresh-hp grid-fresh-hp-linear grid-fresh-contrast grid-fresh-contrast-sdt \
 grid-fresh-statten grid-fresh-sdt grid-fresh-contrast-binary grid-fresh-contrast-sdt-binary \
-grid-fresh-factorized-hgr grid-fresh-mk-hgr: check-deps
+grid-fresh-factorized-hgr grid-fresh-mk-hgr grid-fresh-mk-hgr-binary: check-deps
 	$(call run_grid_train,--fresh)
 
 grid-all: grid-hp grid-hp-linear grid-contrast grid-contrast-sdt grid-statten grid-sdt \

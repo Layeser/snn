@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -144,6 +145,7 @@ def configure_tracking(
     global _ARTIFACT_LOCATION, _ARTIFACT_ROOT
     root = Path(project_root).resolve()
     root.mkdir(parents=True, exist_ok=True)
+    db_name = os.environ.get("MLFLOW_DB", db_name)
     db_path = root / db_name
     artifact_dir = root / artifact_dirname
     artifact_dir.mkdir(parents=True, exist_ok=True)
