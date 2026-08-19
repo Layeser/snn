@@ -1,0 +1,54 @@
+# CIFAR-10-DVS grille ablation : depth=4, embed_dim=512, 400 epochs.
+# batch_size réduit (8) pour V100 avec depth=4 + emb=512.
+# Usage : make grid-fresh-hp DATASET=cifar10-dvs GRID_CAMPAIGN=4-512-400
+
+epochs: 400
+batch_size: 8
+batch_size_dvs: 8
+learning_rate: 0.01
+learning_rate_dvs: 0.01
+weight_decay: 0.0001
+emb_dim: 512
+depth: 4
+num_heads: 8
+T: 16
+chunk_size: 4
+num_workers: 8
+pooling_stat: "0011"
+spike_mode: lif
+lif_backend: auto
+hybrid_qkv: "false"
+attention_mode: factorized
+window_size: 0
+window_shift: "false"
+mix_rank: 0
+num_landmarks: 0
+hgr_lambda: 0.1
+hgr_diag_gate: "true"
+hgr_trace_gate: "true"
+mk_dual_scale: "true"
+membrane_block: "false"
+tet_loss: "true"
+tet_lamb: 0.001
+tet_means: 1.0
+dvs_resize: 64
+dvs_cutout: "true"
+dvs_augment: "true"
+dvs_random_split: "false"
+augment_train: "true"
+rand_augment: "true"
+random_erasing: 0.25
+mixup: 0.0
+label_smoothing: 0.1
+scheduler: cosine
+warmup_epochs: 10
+min_lr: 0.0003
+scheduler_step_size: 30
+scheduler_gamma: 0.5
+scheduler_patience: 4
+scheduler_factor: 0.5
+scheduler_threshold: 0.001
+dataset: cifar10-dvs
+data_dir: ../data
+save_dir: save
+device: cuda

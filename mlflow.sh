@@ -15,9 +15,12 @@
 #   PORT=5001 ./mlflow.sh HPSTAtten
 #   SNN_ROOT=/chemin/snn ./mlflow.sh
 #
-# Grid5000 (flille) : lancer ici, pas sur le nœud GPU.
-# Tunnel depuis votre PC :
-#   ssh -L 5000:localhost:5000 kasekou@flille.lille.grid5000.fr
+# Grid5000 : frontale (flille / flyon) ou nœud du job (gemini-*, sirius-*, …).
+# Le tunnel SSH affiché s'adapte à l'hôte courant.
+# Tunnel depuis votre PC (exemples) :
+#   Lille  : ssh -L 5000:localhost:5000 kasekou@flille.lille.grid5000.fr
+#   Lyon   : ssh -L 5000:localhost:5000 kasekou@flyon.lyon.grid5000.fr
+#   Nœud   : ssh -L 5000:localhost:5000 kasekou@gemini-2.lyon.grid5000.fr
 
 set -euo pipefail
 
@@ -218,11 +221,47 @@ EOF
 }
 
 print_access_hint() {
+  local host_short user tunnel_host tunnel_note
+  host_short="$(hostname -s 2>/dev/null || hostname)"
+  user="${USER:-$(whoami)}"
+
+  case "$host_short" in
+    flille)
+      tunnel_host="${user}@flille.lille.grid5000.fr"
+      tunnel_note="frontale Lille"
+      ;;
+    flyon)
+      tunnel_host="${user}@flyon.lyon.grid5000.fr"
+      tunnel_note="frontale Lyon"
+      ;;
+    gemini-*|sirius-*|chicoree-*|chuc-*)
+      tunnel_host="${user}@${host_short}.lyon.grid5000.fr"
+      if [[ "$host_short" == chicoree-* || "$host_short" == chuc-* ]]; then
+        tunnel_host="${user}@${host_short}.lille.grid5000.fr"
+        tunnel_note="nœud Lille (job OAR)"
+      else
+        tunnel_note="nœud Lyon (job OAR — ex. gemini-2)"
+      fi
+      ;;
+    *)
+      if [[ "$host_short" == *flyon* || "$host_short" == *gemini* || "$host_short" == *sirius* ]]; then
+        tunnel_host="${user}@flyon.lyon.grid5000.fr"
+        tunnel_note="Lyon (fallback flyon)"
+      else
+        tunnel_host="${user}@flille.lille.grid5000.fr"
+        tunnel_note="Lille (fallback flille)"
+      fi
+      ;;
+  esac
+
   echo
-  echo "Tunnel SSH (depuis votre PC local, pas depuis flille) :"
-  echo "  ssh -L ${PORT}:localhost:${PORT} kasekou@flille.lille.grid5000.fr"
+  echo "Tunnel SSH depuis votre PC local (hôte courant : ${host_short}, ${tunnel_note}) :"
+  echo "  ssh -L ${PORT}:localhost:${PORT} ${tunnel_host}"
+  if [[ "$host_short" == gemini-* || "$host_short" == sirius-* ]]; then
+    echo "  (connexion directe au nœud ; si refusée, ouvrir d'abord flyon puis oarsh)"
+  fi
   echo "Navigateur : http://localhost:${PORT}"
-  echo "Expérience : ouvrir celle du dataset (ex. HP-STAtten-CIFAR10-DVS pour HPSTAtten + DVS)."
+  echo "Expérience : ex. HP-STAtten-CIFAR10 ou HP-STAtten-CIFAR10-DVS"
 }
 
 main() {
