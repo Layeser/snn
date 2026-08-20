@@ -37,7 +37,7 @@ config-help:
         reserve-grid-hp reserve-grid-hp-linear reserve-grid-contrast reserve-grid-contrast-sdt \
         reserve-grid-statten reserve-grid-sdt reserve-grid-contrast-binary reserve-grid-contrast-sdt-binary
 
-# Campagne grille optionnelle (ex. GRID_CAMPAIGN=4-512-400 → depth=4, emb=512, 400 ep)
+# Campagne grille optionnelle (ex. GRID_CAMPAIGN=4-512-400 ou 4-384-400)
 GRID_CAMPAIGN ?=
 GRID_DIR := $(CURDIR)/save/grid/$(DATASET)
 ifneq ($(GRID_CAMPAIGN),)
@@ -45,11 +45,21 @@ GRID_DIR := $(CURDIR)/save/grid/$(DATASET)_$(GRID_CAMPAIGN)
 endif
 # CIFAR-10 grille : HP t27 + aug complète (cifar10_grid_sota*.yml) ; DVS → train_cifar10-dvs.yml
 EMBED_DIM ?=
-ifeq ($(GRID_CAMPAIGN),4-512-400)
+ifeq ($(GRID_CAMPAIGN),2-512-400)
+ifeq ($(DATASET),cifar10-dvs)
+GRID_CONFIG := config/campaigns/cifar10_dvs_grid_2-512_400ep.yml
+endif
+else ifeq ($(GRID_CAMPAIGN),4-512-400)
 ifeq ($(DATASET),cifar10)
 GRID_CONFIG := config/campaigns/cifar10_grid_sota_4-512_400ep.yml
 else ifeq ($(DATASET),cifar10-dvs)
 GRID_CONFIG := config/campaigns/cifar10_dvs_grid_4-512_400ep.yml
+endif
+else ifeq ($(GRID_CAMPAIGN),4-384-400)
+ifeq ($(DATASET),cifar10)
+GRID_CONFIG := config/campaigns/cifar10_grid_sota_4-384_400ep.yml
+else ifeq ($(DATASET),cifar10-dvs)
+GRID_CONFIG := config/campaigns/cifar10_dvs_grid_4-384_400ep.yml
 endif
 else ifeq ($(DATASET),cifar10)
 ifeq ($(EMBED_DIM),512)
@@ -329,7 +339,7 @@ grid-help:
 	@echo "  make grid-all                   8 runs (reprise auto si last.pt)"
 	@echo "  Config auto : DATASET=cifar10 → cifar10_grid_sota.yml (HP t27 + aug) | cifar10-dvs → train_cifar10-dvs.yml"
 	@echo "  embed 512   : make grid-statten DATASET=cifar10 EMBED_DIM=512"
-	@echo "  campagne    : GRID_CAMPAIGN=4-512-400 → depth=4, emb=512, 400 ep (CIFAR-10 + DVS)"
+	@echo "  campagne    : GRID_CAMPAIGN=4-512-400 | 4-384-400 → depth=4, 400 ep"
 	@echo "  Checkpoints : save/grid/<DATASET>[_<campagne>]/<variante>/"
 	@echo "  Petit GPU: make grid-contrast EXTRA_ARGS=\"--batch-size 8 --T 8 --vct-num 16\""
 	@echo ""
