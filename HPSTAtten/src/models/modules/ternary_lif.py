@@ -44,12 +44,15 @@ class MultiStepTernaryLIFNode(nn.Module):
     Utilisé pour V dans HP-STAtten (A²OS²A, Guo et al. CVPR 2025).
 
     Seuils ±v_threshold : forward dur (spikes exacts), backward via surrogate ATan.
+    Reset membrane : eq. 27 du papier A²OS²A (V_reset, β).
     """
 
-    def __init__(self, tau=2.0, v_threshold=1.0, detach_reset=True):
+    def __init__(self, tau=2.0, v_threshold=1.0, v_reset=0.0, beta=1.0, detach_reset=True):
         super().__init__()
         self.tau = tau
         self.v_threshold = v_threshold
+        self.v_reset = v_reset
+        self.beta = beta
         self.detach_reset = detach_reset
         self.v = None
 
@@ -67,11 +70,13 @@ class MultiStepTernaryLIFNode(nn.Module):
             pos = _surrogate_heaviside(self.v - self.v_threshold)
             neg = _surrogate_heaviside(-self.v - self.v_threshold)
             spike = pos - neg
-            reset = pos + neg
+            abs_s = pos + neg
+            # Papier eq. 27 : H = V_reset·|S| + β·U·(1-|S|) avec |S|=Hea(|U|-Vth)
+            h = self.v_reset * abs_s + self.beta * self.v * (1.0 - abs_s)
             if self.detach_reset:
-                self.v = self.v.detach() * (1.0 - reset)
+                self.v = h.detach()
             else:
-                self.v = self.v * (1.0 - reset)
+                self.v = h
             outputs.append(spike)
 
         return torch.stack(outputs, dim=0)

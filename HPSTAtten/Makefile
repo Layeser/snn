@@ -49,6 +49,12 @@ ifeq ($(GRID_CAMPAIGN),2-512-400)
 ifeq ($(DATASET),cifar10-dvs)
 GRID_CONFIG := config/campaigns/cifar10_dvs_grid_2-512_400ep.yml
 endif
+else ifeq ($(GRID_CAMPAIGN),2-512-310)
+ifeq ($(DATASET),cifar10)
+GRID_CONFIG := config/campaigns/cifar10_grid_sota_2-512_310ep.yml
+else ifeq ($(DATASET),cifar10-dvs)
+GRID_CONFIG := config/campaigns/cifar10_dvs_grid_2-512_310ep.yml
+endif
 else ifeq ($(GRID_CAMPAIGN),4-512-400)
 ifeq ($(DATASET),cifar10)
 GRID_CONFIG := config/campaigns/cifar10_grid_sota_4-512_400ep.yml

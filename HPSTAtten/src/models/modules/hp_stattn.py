@@ -1,6 +1,11 @@
 import torch
 import torch.nn as nn
 
+from modules.a2os2a_scaling import (
+    resolve_contrast_scaling,
+    resolve_factorized_scaling,
+    stabilize_hybrid_keys,
+)
 from modules.contrast_attn import ContrastTokenMixer
 from modules.factorized_mixing import chunked_factorized_mix, window_factorized_mix
 from modules.spike import make_lif
@@ -27,6 +32,7 @@ class HPSTAtten(nn.Module):
     Fusion :
       - STAtten : chunks temporels + factorisation A = K^T V, out = Q @ A
       - A²OS²A  : Q binaire (LIF), K float (ReLU), V ternaire (TernaryLIF), SN final
+                  hybrid → pas de scaling 1/H (papier §4.3) ; binaire → scaling VSSA
       - Modes   : factorized | factorized_hgr | mk_hgr | sdt | contrast | contrast_sdt
 
     Entrée  : (T, B, D, H, W)
@@ -212,12 +218,23 @@ class HPSTAtten(nn.Module):
         )
         return q, k, v, N, head_dim
 
+    def _prepare_qkv_for_attention(self, q, k, v, N):
+        """Stabilise K hybride pour agrégations token-wise (contrast / SDT)."""
+        if self.hybrid_qkv and self.attention_mode in ("contrast", "contrast_sdt", "sdt"):
+            k = stabilize_hybrid_keys(k)
+        return q, k, v
+
+    def _factorized_scaling(self, spatial_h: int) -> float:
+        return resolve_factorized_scaling(
+            hybrid_qkv=self.hybrid_qkv,
+            dvs=self.dvs,
+            spatial_h=spatial_h,
+            chunk_size=self.chunk_size,
+        )
+
     def _factorized_attention(self, q, k, v, T, B, C, H, W, N, head_dim):
         """STAtten : Q @ (K^T V) par chunk temporel (+ ablations complexité)."""
-        if self.dvs:
-            scaling_factor = 1.0 / (H * H * self.chunk_size)
-        else:
-            scaling_factor = 1.0 / H
+        scaling_factor = self._factorized_scaling(H)
 
         mix_kw = self._mix_kwargs()
 
@@ -277,6 +294,8 @@ class HPSTAtten(nn.Module):
         """
         kv = k.mul(v)                       # (T, B, heads, N, head_dim)
         kv = kv.sum(dim=-2, keepdim=True)   # (T, B, heads, 1, head_dim)
+        if self.hybrid_qkv:
+            kv = kv / float(N)
         kv = self.talking_heads_lif(kv)
         x = q.mul(kv)                       # broadcast sur N -> (T, B, heads, N, head_dim)
         # heads + head_dim -> channels : (T, B, C, N) -> (T, B, C, H, W)
@@ -285,14 +304,11 @@ class HPSTAtten(nn.Module):
         return x
 
     def _contrast_scaling(self, H: int) -> float:
-        """Normalisation KᵀV (mode contrast uniquement — pas contrast_sdt).
-
-        CIFAR : 1/H (= 1/√N). DVS : 1/N (= 1/H²) par pas de temps ; le factorized
-        DVS utilise 1/(N·chunk) car il fusionne chunk_size pas dans le mixage.
-        """
-        if self.dvs:
-            return 1.0 / (H * H)
-        return 1.0 / H
+        return resolve_contrast_scaling(
+            hybrid_qkv=self.hybrid_qkv,
+            dvs=self.dvs,
+            spatial_h=H,
+        )
 
     def _contrast_attention(self, q, k, v, T, B, C, H, W, N, head_dim):
         """Visual-Contrast Attention linéaire (VCA sans Softmax).
@@ -303,9 +319,8 @@ class HPSTAtten(nn.Module):
         """
         scaling_factor = self._contrast_scaling(H)
 
-        if self.dvs and self.hybrid_qkv and self.attention_mode in ("contrast", "contrast_sdt"):
-            # K hybride = ReLU (non borné) ; Σ(K⊙V) ou KᵀV diverge sur DVS après ~20–30 ep.
-            k = k.clamp(min=0.0, max=8.0)
+        if self.hybrid_qkv:
+            k = stabilize_hybrid_keys(k)
 
         mixer_kwargs = dict(
             q=q, k=k, v=v, H=H, W=W, scaling_factor=scaling_factor,
@@ -333,6 +348,7 @@ class HPSTAtten(nn.Module):
         x_pool = self.pool(x) if self.dvs else None
 
         q, k, v, N, head_dim = self._encode_qkv(x, T, B, C, H, W)
+        q, k, v = self._prepare_qkv_for_attention(q, k, v, N)
         if self.attention_mode == "sdt":
             x = self._sdt_attention(q, k, v, T, B, C, H, W, N, head_dim)
         elif self.attention_mode in ("contrast", "contrast_sdt"):
