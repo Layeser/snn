@@ -20,6 +20,15 @@ def a2os2a_factorized_scaling() -> float:
     return 1.0
 
 
+def hybrid_factorized_dvs_token_norm(*, spatial_h: int, chunk_size: int) -> float:
+    """Normalise la somme sur cs·N tokens dans KᵀV (STAtten factorisé).
+
+    Distinct du scaling 1/H VSSA : nécessaire sur DVS où cs·N est grand et AMP fp16
+    saturerait avec scaling=1.0. CIFAR-10 RGB (N plus petit) reste à 1.0.
+    """
+    return 1.0 / (spatial_h * spatial_h * chunk_size)
+
+
 def resolve_factorized_scaling(
     *,
     hybrid_qkv: bool,
@@ -28,6 +37,10 @@ def resolve_factorized_scaling(
     chunk_size: int,
 ) -> float:
     if hybrid_qkv:
+        if dvs:
+            return hybrid_factorized_dvs_token_norm(
+                spatial_h=spatial_h, chunk_size=chunk_size
+            )
         return a2os2a_factorized_scaling()
     return vssa_factorized_scaling(dvs=dvs, spatial_h=spatial_h, chunk_size=chunk_size)
 

@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.a2os2a_scaling import resolve_factorized_scaling
+from modules.a2os2a_scaling import resolve_factorized_scaling, stabilize_hybrid_keys
 from modules.fhgr_mixing import mix_factorized_hgr
 from modules.spike import make_lif
 from modules.ternary_lif import MultiStepTernaryLIFNode
@@ -186,6 +186,8 @@ class MKHPSTAtten(nn.Module):
     def _fhgr_mix(self, q, k, v, h: int, w: int) -> torch.Tensor:
         """FHGR mixing avec chunk temporel STAtten. Retour (T,B,heads,N,d)."""
         t = q.shape[0]
+        if self.hybrid_qkv:
+            k = stabilize_hybrid_keys(k)
         scaling = self._scaling(h)
         num_chunks = t // self.chunk_size
         n = h * w

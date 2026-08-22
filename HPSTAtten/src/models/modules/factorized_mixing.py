@@ -19,9 +19,12 @@ def mix_factorized(
     v: torch.Tensor,
     scaling_factor: float,
 ) -> torch.Tensor:
-    """out = Q @ (Kᵀ V) — baseline STAtten."""
-    attn = torch.matmul(k.transpose(-2, -1), v) * scaling_factor
-    return torch.matmul(q, attn)
+    """out = Q @ (Kᵀ V) — baseline STAtten (matmul fp32 pour stabilité AMP)."""
+    qf = q.float()
+    kf = k.float()
+    vf = v.float()
+    attn = torch.matmul(kf.transpose(-2, -1), vf) * scaling_factor
+    return torch.matmul(qf, attn).to(dtype=q.dtype)
 
 
 def mix_lowrank(

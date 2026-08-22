@@ -219,8 +219,14 @@ class HPSTAtten(nn.Module):
         return q, k, v, N, head_dim
 
     def _prepare_qkv_for_attention(self, q, k, v, N):
-        """Stabilise K hybride pour agrégations token-wise (contrast / SDT)."""
-        if self.hybrid_qkv and self.attention_mode in ("contrast", "contrast_sdt", "sdt"):
+        """Stabilise K hybride (ReLU float) avant toute agrégation sur N tokens."""
+        if self.hybrid_qkv and self.attention_mode in (
+            "factorized",
+            "factorized_hgr",
+            "contrast",
+            "contrast_sdt",
+            "sdt",
+        ):
             k = stabilize_hybrid_keys(k)
         return q, k, v
 

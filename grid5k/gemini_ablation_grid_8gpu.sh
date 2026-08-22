@@ -1,16 +1,9 @@
 #!/usr/bin/env bash
-# Ablation grille 4×2 complète — 8 runs en parallèle (1 variante / GPU).
+# Ablation grille 4×2 — jusqu'à 8 runs en parallèle (1 variante / GPU).
 #
 # 4 attention_mode × 2 hybrid_qkv = 8 cases (make grid-fresh-*).
-# Plan (gemini, 8× V100) — vague CIFAR-10 puis vague CIFAR-10-DVS :
-#   GPU 0 → grid-fresh-hp
-#   GPU 1 → grid-fresh-hp-linear
-#   GPU 2 → grid-fresh-contrast
-#   GPU 3 → grid-fresh-contrast-sdt
-#   GPU 4 → grid-fresh-statten
-#   GPU 5 → grid-fresh-sdt
-#   GPU 6 → grid-fresh-contrast-binary
-#   GPU 7 → grid-fresh-contrast-sdt-binary
+# Si le nœud a < 8 GPU (ex. gemini-2 avec 6), les 8 variantes tournent
+# en sous-vagues : 6 parallèles puis 2 parallèles.
 #
 # Usage (sur le nœud GPU, ex. gemini-2) :
 #   cd ~/internship/snn
@@ -19,20 +12,25 @@
 #   bash grid5k/gemini_ablation_grid_8gpu.sh --stop-all
 #
 # Variables :
+#   NUM_GPUS=auto                  auto-détecté via nvidia-smi (défaut)
 #   GRID_CAMPAIGN=2-512-310        campagne CIFAR-10 ( défaut )
 #   GRID_CAMPAIGN_DVS=2-512-310    campagne DVS ( défaut = même )
 #   DATASETS=cifar10               une seule vague (pas DVS)
+#   VARIANTS="6 7"                 sous-ensemble (v6=contrast-binary, v7=contrast_sdt-binary)
+#   GPU_IDS="0 1"                  GPU physiques libres (défaut : 0..N-1)
 #   FRESH=1|0  FORCE=1
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SNN_ROOT="$(dirname "$SCRIPT_DIR")"
 HPST="${SNN_ROOT}/HPSTAtten"
-NUM_GPUS=8
+NUM_GPUS="${NUM_GPUS:-auto}"
 
 GRID_CAMPAIGN="${GRID_CAMPAIGN:-2-512-310}"
 GRID_CAMPAIGN_DVS="${GRID_CAMPAIGN_DVS:-${GRID_CAMPAIGN}}"
 DATASETS="${DATASETS:-cifar10 cifar10-dvs}"
+VARIANTS="${VARIANTS:-}"
+GPU_IDS="${GPU_IDS:-}"
 FRESH="${FRESH:-1}"
 BACKGROUND=0
 FORCE="${FORCE:-0}"
@@ -107,17 +105,66 @@ fi
 
 RUN_TAG="${RUN_TAG:-$(date +%Y%m%d_%H%M%S)}"
 LOG_ROOT="${SNN_ROOT}/outputs/gemini_ablation_grid_8gpu/${RUN_TAG}"
+VARIANT_LIST=()
+GPU_LIST=()
+
+build_variant_list() {
+  VARIANT_LIST=()
+  if [[ -n "$VARIANTS" ]]; then
+    local v
+    for v in $VARIANTS; do
+      if [[ "$v" -lt 0 || "$v" -ge 8 ]]; then
+        echo "ERREUR: VARIANTS index invalide v${v} (attendu 0..7)." >&2
+        exit 1
+      fi
+      VARIANT_LIST+=("$v")
+    done
+  else
+    local i
+    for ((i=0; i<${#GRID_TARGETS[@]}; i++)); do
+      VARIANT_LIST+=("$i")
+    done
+  fi
+}
+
+build_gpu_list() {
+  GPU_LIST=()
+  if [[ -n "$GPU_IDS" ]]; then
+    local g
+    for g in $GPU_IDS; do
+      GPU_LIST+=("$g")
+    done
+  else
+    local g
+    for ((g=0; g<NUM_GPUS; g++)); do
+      GPU_LIST+=("$g")
+    done
+  fi
+  if [[ ${#GPU_LIST[@]} -lt 1 ]]; then
+    echo "ERREUR: aucun GPU dans GPU_IDS." >&2
+    exit 1
+  fi
+}
+
+detect_num_gpus() {
+  if [[ "$NUM_GPUS" != "auto" ]]; then
+    return 0
+  fi
+  NUM_GPUS=$(nvidia-smi -L 2>/dev/null | wc -l)
+}
 
 require_gpu_node() {
   if ! command -v nvidia-smi >/dev/null 2>&1; then
     echo "ERREUR: nvidia-smi absent — lancez sur un nœud GPU (gemini-*)." >&2
     exit 1
   fi
-  local count
-  count=$(nvidia-smi -L 2>/dev/null | wc -l)
-  if [[ "$count" -lt "$NUM_GPUS" ]]; then
-    echo "ERREUR: ${NUM_GPUS} GPU requis, ${count} détecté(s)." >&2
+  detect_num_gpus
+  if [[ "$NUM_GPUS" -lt 1 ]]; then
+    echo "ERREUR: aucun GPU détecté." >&2
     exit 1
+  fi
+  if [[ "$NUM_GPUS" -lt "$NUM_VARIANTS" ]]; then
+    echo "Note: ${NUM_GPUS} GPU(s) — ${NUM_VARIANTS} variantes en sous-vagues."
   fi
   if ! "${SNN_ROOT}/.venv/bin/python" -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
     echo "ERREUR: torch.cuda indisponible sur $(hostname)." >&2
@@ -128,7 +175,7 @@ require_gpu_node() {
 preflight_gpus() {
   [[ "$FORCE" == 1 ]] && return 0
   local gpu count pid line busy=0
-  for gpu in $(seq 0 $((NUM_GPUS - 1))); do
+  for gpu in "${GPU_LIST[@]}"; do
     count=0
     while IFS= read -r pid; do
       [[ -z "$pid" ]] && continue
@@ -145,7 +192,7 @@ preflight_gpus() {
   if [[ "$busy" -eq 1 ]]; then
     echo "" >&2
     echo "  bash grid5k/gemini_ablation_grid_8gpu.sh --stop-all" >&2
-    echo "Ou FORCE=1 bash $0 --background" >&2
+    echo "Ou GPU_IDS=\"4 5\" …  FORCE=1 bash $0 --background" >&2
     exit 1
   fi
 }
@@ -161,7 +208,10 @@ grid_campaign_cifar10=${GRID_CAMPAIGN}
 grid_campaign_dvs=${GRID_CAMPAIGN_DVS}
 datasets=${DATASETS}
 log_root=${LOG_ROOT}
-mapping=GPU0..7 -> ${GRID_TARGETS[*]}
+num_gpus=${NUM_GPUS}
+variants=${VARIANTS:-v${VARIANT_LIST[*]}}
+gpu_ids=${GPU_IDS:-${GPU_LIST[*]}}
+mapping=v0..v7 -> ${GRID_TARGETS[*]}
 EOF
   ln -sfn "$LOG_ROOT" "${SNN_ROOT}/outputs/gemini_ablation_grid_8gpu/LATEST"
 }
@@ -176,11 +226,12 @@ campaign_for_dataset() {
 }
 
 run_single() {
-  local gpu="$1"
-  local dataset="$2"
-  local target="$3"
-  local campaign="$4"
-  local wave_log="${LOG_ROOT}/${dataset}/gpu${gpu}.log"
+  local phys_gpu="$1"
+  local variant_idx="$2"
+  local dataset="$3"
+  local target="$4"
+  local campaign="$5"
+  local wave_log="${LOG_ROOT}/${dataset}/v${variant_idx}.log"
   local -a make_args=(DATASET="${dataset}")
 
   if [[ -n "$campaign" ]]; then
@@ -190,7 +241,7 @@ run_single() {
   mkdir -p "${LOG_ROOT}/${dataset}"
   {
     echo "============================================================"
-    echo "GPU ${gpu} | ${dataset} | ${target} | $(hostname) | $(date -Iseconds)"
+    echo "variant v${variant_idx} | phys GPU ${phys_gpu} | ${dataset} | ${target} | $(hostname) | $(date -Iseconds)"
     echo "GRID_CAMPAIGN=${campaign}"
     echo "============================================================"
     cd "$HPST"
@@ -208,26 +259,43 @@ launch_wave() {
   local dataset="$1"
   local campaign="$2"
   local fail=0
-  local gpu target pid
+  local variant batch_start batch_end slot phys_gpu target pid
+  local batch_size=${#GPU_LIST[@]}
+  local num_selected=${#VARIANT_LIST[@]}
 
   echo ""
-  echo "========== Vague ${dataset} (GRID_CAMPAIGN=${campaign}) =========="
+  echo "========== Vague ${dataset} (GRID_CAMPAIGN=${campaign}, GPU: ${GPU_LIST[*]}) =========="
   mkdir -p "${LOG_ROOT}/${dataset}"
 
-  for gpu in $(seq 0 $((NUM_GPUS - 1))); do
-    target="${GRID_TARGETS[$gpu]}"
-    CUDA_VISIBLE_DEVICES="${gpu}" run_single "${gpu}" "${dataset}" "${target}" "${campaign}" &
-    pid=$!
-    echo "${pid}" >"${LOG_ROOT}/${dataset}/gpu${gpu}.pid"
-    echo "  GPU ${gpu} → ${target}  PID ${pid}"
-  done
-
-  for gpu in $(seq 0 $((NUM_GPUS - 1))); do
-    read -r pid <"${LOG_ROOT}/${dataset}/gpu${gpu}.pid"
-    if ! wait "${pid}"; then
-      fail=1
-      echo "Échec GPU ${gpu} (${dataset}) — voir ${LOG_ROOT}/${dataset}/gpu${gpu}.log" >&2
+  for ((batch_start=0; batch_start<num_selected; batch_start+=batch_size)); do
+    batch_end=$((batch_start + batch_size - 1))
+    if [[ "$batch_end" -ge "$num_selected" ]]; then
+      batch_end=$((num_selected - 1))
     fi
+    echo "  Sous-vague $(((batch_start + 1)))-$(($batch_end + 1))/${num_selected}"
+
+    slot=0
+    for ((i=batch_start; i<=batch_end; i++)); do
+      variant="${VARIANT_LIST[$i]}"
+      phys_gpu="${GPU_LIST[$slot]}"
+      slot=$((slot + 1))
+      target="${GRID_TARGETS[$variant]}"
+      CUDA_VISIBLE_DEVICES="${phys_gpu}" run_single "${phys_gpu}" "${variant}" "${dataset}" "${target}" "${campaign}" &
+      pid=$!
+      echo "${pid}" >"${LOG_ROOT}/${dataset}/v${variant}.pid"
+      echo "    v${variant} (GPU ${phys_gpu}) → ${target}  PID ${pid}"
+    done
+
+    slot=0
+    for ((i=batch_start; i<=batch_end; i++)); do
+      variant="${VARIANT_LIST[$i]}"
+      read -r pid <"${LOG_ROOT}/${dataset}/v${variant}.pid"
+      if ! wait "${pid}"; then
+        fail=1
+        echo "Échec v${variant} (${dataset}) — voir ${LOG_ROOT}/${dataset}/v${variant}.log" >&2
+      fi
+      slot=$((slot + 1))
+    done
   done
 
   {
@@ -241,11 +309,14 @@ launch_wave() {
 launch_workers() {
   local ds fail=0
   require_gpu_node
+  build_variant_list
+  build_gpu_list
   preflight_gpus
   write_meta
 
   echo "Run : ${RUN_TAG}"
-  echo "Logs : ${LOG_ROOT}/<dataset>/gpu{0..7}.log"
+  echo "Variantes : v${VARIANT_LIST[*]}"
+  echo "Logs : ${LOG_ROOT}/<dataset>/v*.log"
   nvidia-smi -L || true
 
   for ds in ${DATASETS}; do
@@ -270,9 +341,9 @@ launch_workers() {
 if [[ "$BACKGROUND" -eq 1 ]]; then
   mkdir -p "$LOG_ROOT"
   launcher_log="${LOG_ROOT}/launcher.log"
-  nohup env RUN_TAG="$RUN_TAG" FRESH="$FRESH" FORCE="$FORCE" \
+  nohup env RUN_TAG="$RUN_TAG" FRESH="$FRESH" FORCE="$FORCE" NUM_GPUS="$NUM_GPUS" \
     GRID_CAMPAIGN="$GRID_CAMPAIGN" GRID_CAMPAIGN_DVS="$GRID_CAMPAIGN_DVS" \
-    DATASETS="$DATASETS" \
+    DATASETS="$DATASETS" VARIANTS="$VARIANTS" GPU_IDS="$GPU_IDS" \
     bash "$0" >>"$launcher_log" 2>&1 &
   child=$!
   disown "$child" 2>/dev/null || true
@@ -283,9 +354,9 @@ if [[ "$BACKGROUND" -eq 1 ]]; then
     cat "$launcher_log" >&2
     exit 1
   fi
-  echo "Lancé en arrière-plan (grille 4×2, 8 GPU par vague)."
+  echo "Lancé en arrière-plan (grille 4×2, ${NUM_GPUS:-auto} GPU détectés)."
   echo "  Logs : ${LOG_ROOT}/"
-  echo "  Suivi : tail -f ${LOG_ROOT}/cifar10/gpu0.log"
+  echo "  Suivi : tail -f ${LOG_ROOT}/cifar10-dvs/v0.log"
   echo "  GPU   : sleep 20 && nvidia-smi"
   exit 0
 fi
